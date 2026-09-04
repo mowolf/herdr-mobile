@@ -28,8 +28,16 @@
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </button>
-      <button type="button" id="btn-esc" class="dock-key" title="Send Escape">esc</button>
-      <button type="button" id="btn-ctrl-c" class="dock-key danger-key" title="Send Interrupt (Ctrl+C)">^C</button>
+      <button type="button" id="btn-keys" class="icon-btn header-keys" aria-label="Key palette" title="Key palette">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+          <line x1="6" y1="10" x2="6" y2="10"></line>
+          <line x1="10" y1="10" x2="10" y2="10"></line>
+          <line x1="14" y1="10" x2="14" y2="10"></line>
+          <line x1="18" y1="10" x2="18" y2="10"></line>
+          <line x1="8" y1="14" x2="16" y2="14"></line>
+        </svg>
+      </button>
       <button id="btn-settings" class="icon-btn header-gear" aria-label="Settings" title="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
@@ -54,6 +62,25 @@
 
     <!-- Bottom Input Dock -->
     <footer class="input-dock">
+      <!-- Keys the agent asks for at confirmation prompts -->
+      <div id="keys-bar" class="keys-bar">
+        <div class="keys-row">
+          <button type="button" id="btn-esc" class="key-btn" title="Send Escape">esc</button>
+          <button type="button" id="btn-ctrl-c" class="key-btn key-no" title="Send Interrupt (Ctrl+C)">^C</button>
+          <button type="button" class="key-btn key-yes" data-key="y">y</button>
+          <button type="button" class="key-btn key-no" data-key="n">n</button>
+          <button type="button" class="key-btn key-enter" data-key="enter">⏎</button>
+        </div>
+        <div class="keys-row">
+          <button type="button" class="key-btn" data-key="1">1</button>
+          <button type="button" class="key-btn" data-key="2">2</button>
+          <button type="button" class="key-btn" data-key="3">3</button>
+          <button type="button" class="key-btn" data-key="up">↑</button>
+          <button type="button" class="key-btn" data-key="down">↓</button>
+          <button type="button" class="key-btn" data-key="tab">⇥</button>
+        </div>
+      </div>
+
       <!-- Mirrors whatever is typed into the pane on the desktop -->
       <div id="terminal-input-row" class="terminal-input-row hidden">
         <div id="terminal-input" class="terminal-input"></div>

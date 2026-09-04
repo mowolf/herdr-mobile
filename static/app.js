@@ -7,6 +7,7 @@
     historyText: "",
     linesCount: 100,
     showStatusBar: false,
+    showKeys: true,
     mode: "",
     isUserScrolledUp: false,
     pollInterval: 2000,
@@ -35,6 +36,8 @@
   const elTerminalInputRow = document.getElementById("terminal-input-row");
   const elBtnAdopt = document.getElementById("btn-adopt");
   const elBtnCycleMode = document.getElementById("btn-cycle-mode");
+  const elBtnKeys = document.getElementById("btn-keys");
+  const elKeysBar = document.getElementById("keys-bar");
   const elModeCurrent = document.getElementById("mode-current");
   const elBtnSend = document.getElementById("btn-send");
   const elBtnCtrlC = document.getElementById("btn-ctrl-c");
@@ -687,6 +690,7 @@
       }
       state.showStatusBar = localStorage.getItem("herdr.statusbar") === "1";
       elToggleStatusBar.checked = state.showStatusBar;
+      setKeysBar(localStorage.getItem("herdr.keys") !== "0");
     } catch (err) {
       /* localStorage unavailable in private mode; defaults are fine */
     }
@@ -773,6 +777,24 @@
     state.linesCount = parseInt(e.target.value, 10) || 100;
     savePref("herdr.lines", String(state.linesCount));
     fetchHistory(true);
+  });
+
+  // Key palette: the single keypresses agents ask for at confirmation prompts.
+  function setKeysBar(show) {
+    state.showKeys = show;
+    elKeysBar.classList.toggle("hidden", !show);
+    elBtnKeys.classList.toggle("active", show);
+    savePref("herdr.keys", show ? "1" : "0");
+  }
+
+  elBtnKeys.addEventListener("click", () => {
+    triggerHaptic();
+    setKeysBar(!state.showKeys);
+  });
+
+  elKeysBar.addEventListener("click", (e) => {
+    const btn = e.target.closest(".key-btn");
+    if (btn && btn.dataset.key) sendKey(btn.dataset.key);
   });
 
   // shift+tab cycles the agent between auto, manual and plan mode.

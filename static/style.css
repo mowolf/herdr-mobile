@@ -91,11 +91,6 @@ html, body {
   flex-shrink: 0;
 }
 
-.app-header .dock-key {
-  height: 30px;
-  padding: 0 9px;
-  margin-left: 4px;
-}
 
 .conn-dot {
   position: absolute;
@@ -444,6 +439,48 @@ html, body {
 /* Prompt Form */
 /* Mirror of the desktop's own input line, so a prompt typed on the laptop is
    visibly the terminal's and not something half-entered on the phone. */
+/* Key palette: single keypresses for the agent's confirmation prompts. */
+.keys-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 2px 0;
+}
+
+.keys-bar.hidden { display: none; }
+
+/* Two fixed rows: every key stays reachable without a sideways swipe. */
+.keys-row {
+  display: flex;
+  gap: 6px;
+}
+
+.key-btn {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.key-btn:active { background: var(--bg-hover); transform: scale(0.94); }
+
+.key-yes { color: var(--status-idle); border-color: rgba(63, 185, 80, 0.35); }
+.key-no { color: #ff7b72; border-color: rgba(248, 81, 73, 0.3); }
+.key-enter { color: var(--accent-primary); border-color: rgba(47, 129, 247, 0.4); }
+
+.header-keys.active {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
 /* Row mirrors the composer below it: text on the left, a round action button
    on the right at the same size and offset as Send, so the two line up. */
 .terminal-input-row {
@@ -516,32 +553,9 @@ html, body {
   margin: 0;
 }
 
-.dock-key {
-  flex-shrink: 0;
-  height: 34px;
-  padding: 0 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  border-radius: 17px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-}
 
-.dock-key:active {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
 
-.danger-key {
-  color: #ff7b72;
-  border-color: rgba(248, 81, 73, 0.3);
-}
 
-.danger-key:active { background: rgba(248, 81, 73, 0.2); }
 
 .prompt-input {
   flex: 1;
