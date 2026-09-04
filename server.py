@@ -10,13 +10,13 @@ import json
 import socket
 import mimetypes
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 HERDR_SOCKET_PATH = os.environ.get("HERDR_SOCKET", "/root/.config/herdr/herdr.sock")
 HOST = os.environ.get("HOST", "127.0.0.1")
-PORT = int(os.environ.get("PORT", "3000"))
+PORT = int(os.environ.get("PORT", "3009"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
@@ -106,7 +106,7 @@ class HerdrHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        path = parsed.path
+        path = unquote(parsed.path)
         qs = parse_qs(parsed.query)
 
         # API: List all active agents
@@ -139,7 +139,7 @@ class HerdrHandler(BaseHTTPRequestHandler):
             parts = path.split("/")
             # ["", "api", "agents", "<pane_id>", "history"]
             if len(parts) == 5:
-                pane_id = parts[3]
+                pane_id = unquote(parts[3])
                 lines = int(qs.get("lines", ["100"])[0])
                 lines = min(max(lines, 10), 1000)
                 source = qs.get("source", ["recent_unwrapped"])[0]
@@ -178,7 +178,7 @@ class HerdrHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        path = parsed.path
+        path = unquote(parsed.path)
 
         # Read JSON body
         content_length = int(self.headers.get("Content-Length", 0))
@@ -194,7 +194,7 @@ class HerdrHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/agents/") and path.endswith("/prompt"):
             parts = path.split("/")
             if len(parts) == 5:
-                pane_id = parts[3]
+                pane_id = unquote(parts[3])
                 text = body.get("text", "").strip()
                 if not text:
                     self.send_json({"ok": False, "error": "Empty prompt text"}, 400)
@@ -226,7 +226,7 @@ class HerdrHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/agents/") and path.endswith("/keys"):
             parts = path.split("/")
             if len(parts) == 5:
-                pane_id = parts[3]
+                pane_id = unquote(parts[3])
                 keys = body.get("keys")
                 if not keys:
                     key = body.get("key")
