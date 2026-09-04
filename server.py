@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import socket
+import hashlib
 import mimetypes
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
@@ -120,11 +121,28 @@ class HerdrHandler(BaseHTTPRequestHandler):
                 return
 
             agents_raw = res.get("result", {}).get("agents", [])
+
+            # Workspace labels are what the desktop UI shows ("herdr-mobile",
+            # "ib-orbit"); agent.list only carries opaque ids like "w2:p1".
+            ws_res = call_herdr_rpc("workspace.list")
+            workspaces = {
+                w.get("workspace_id"): w
+                for w in ws_res.get("result", {}).get("workspaces", [])
+            }
+
             agents = []
             for a in agents_raw:
+                pane_id = a.get("pane_id") or ""
+                ws = workspaces.get(a.get("workspace_id"), {})
+                label = ws.get("label") or ""
+                # Disambiguate only when a workspace actually holds several panes.
+                if label and ws.get("pane_count", 1) > 1:
+                    label = f"{label} \u00b7{pane_id.rsplit(':p', 1)[-1]}"
                 agents.append({
-                    "pane_id": a.get("pane_id"),
-                    "name": a.get("name") or a.get("pane_id"),
+                    "pane_id": pane_id,
+                    "name": label or a.get("name") or pane_id,
+                    "workspace_label": ws.get("label") or "",
+                    "workspace_number": ws.get("number"),
                     "agent": a.get("agent"),
                     "status": a.get("agent_status", "unknown"),
                     "title": a.get("terminal_title_stripped") or a.get("terminal_title") or "",
@@ -287,11 +305,22 @@ class HerdrHandler(BaseHTTPRequestHandler):
             with open(target_file, "rb") as f:
                 content = f.read()
 
+            # Without a validator, "no-cache" leaves iOS free to reuse a stale
+            # copy, which strands home-screen installs on an old build. Serve a
+            # strong ETag so revalidation is meaningful, and answer 304 to it.
+            etag = '"%s"' % hashlib.sha1(content).hexdigest()[:16]
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(HTTPStatus.NOT_MODIFIED)
+                self.send_header("ETag", etag)
+                self.send_header("Cache-Control", "no-cache, must-revalidate")
+                self.end_headers()
+                return
+
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(content)))
-            # Short cache for static files, revalidate
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
             self.end_headers()
             if not head_only:
                 self.wfile.write(content)
