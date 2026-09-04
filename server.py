@@ -164,22 +164,22 @@ class HerdrHandler(BaseHTTPRequestHandler):
                 lines = int(qs.get("lines", ["100"])[0])
                 lines = min(max(lines, 10), 1000)
                 source = qs.get("source", ["recent_unwrapped"])[0]
+                # "ansi" keeps the SGR sequences so the client can mirror the
+                # terminal's own colours; "text" is the plain fallback.
+                fmt = "ansi" if qs.get("format", ["text"])[0] == "ansi" else "text"
 
-                res = call_herdr_rpc("agent.read", {
-                    "target": pane_id,
+                read_params = {
                     "source": source,
                     "lines": lines,
-                    "strip_ansi": True,
-                })
+                    "format": fmt,
+                    "strip_ansi": fmt != "ansi",
+                }
+
+                res = call_herdr_rpc("agent.read", dict(read_params, target=pane_id))
 
                 if "error" in res:
                     # fallback to pane.read if agent.read fails
-                    res = call_herdr_rpc("pane.read", {
-                        "pane_id": pane_id,
-                        "source": source,
-                        "lines": lines,
-                        "strip_ansi": True,
-                    })
+                    res = call_herdr_rpc("pane.read", dict(read_params, pane_id=pane_id))
 
                 if "error" in res:
                     self.send_json(res, 400)

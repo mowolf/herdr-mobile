@@ -7,6 +7,7 @@
     historyText: "",
     linesCount: 100,
     showStatusBar: false,
+    mode: "",
     isUserScrolledUp: false,
     pollInterval: 2000,
     timer: null,
@@ -30,6 +31,11 @@
   const elBtnScrollBottom = document.getElementById("btn-scroll-bottom");
   const elPromptForm = document.getElementById("prompt-form");
   const elPromptInput = document.getElementById("prompt-input");
+  const elTerminalInput = document.getElementById("terminal-input");
+  const elTerminalInputRow = document.getElementById("terminal-input-row");
+  const elBtnAdopt = document.getElementById("btn-adopt");
+  const elBtnCycleMode = document.getElementById("btn-cycle-mode");
+  const elModeCurrent = document.getElementById("mode-current");
   const elBtnSend = document.getElementById("btn-send");
   const elBtnCtrlC = document.getElementById("btn-ctrl-c");
   const elBtnEsc = document.getElementById("btn-esc");
@@ -67,6 +73,102 @@
    * ------------------------------------------------------------------- */
 
   const RE_RULE_GLYPH = /[─━┄┅┈┉═—–_=]/g;
+  const RE_SGR = /\x1b\[([0-9;]*)m/g;
+
+  /* Split one ANSI line into styled runs, carrying the SGR state in `st` so
+     attributes opened on an earlier line keep applying. Only colours the
+     terminal actually sets are emitted; everything else inherits the block's
+     own colour, which keeps the speaker roles readable. */
+  function ansiRuns(line, st) {
+    const runs = [];
+    let last = 0;
+    const push = (text) => {
+      if (!text) return;
+      runs.push({ text, fg: st.fg, bg: st.bg, bold: st.bold, italic: st.italic, underline: st.underline });
+    };
+
+    RE_SGR.lastIndex = 0;
+    let m;
+    while ((m = RE_SGR.exec(line)) !== null) {
+      push(line.slice(last, m.index));
+      last = m.index + m[0].length;
+      applySgr(m[1], st);
+    }
+    push(line.slice(last));
+    return runs;
+  }
+
+  function applySgr(paramText, st) {
+    const parts = (paramText || "0").split(";").map((n) => parseInt(n, 10) || 0);
+    for (let i = 0; i < parts.length; i++) {
+      const code = parts[i];
+      if (code === 0) {
+        st.fg = null; st.bg = null; st.bold = false; st.italic = false; st.underline = false;
+      } else if (code === 1) st.bold = true;
+      else if (code === 3) st.italic = true;
+      else if (code === 4) st.underline = true;
+      else if (code === 22) st.bold = false;
+      else if (code === 23) st.italic = false;
+      else if (code === 24) st.underline = false;
+      else if (code === 39) st.fg = null;
+      else if (code === 49) st.bg = null;
+      else if ((code === 38 || code === 48) && parts[i + 1] === 2) {
+        const rgb = `rgb(${parts[i + 2] | 0},${parts[i + 3] | 0},${parts[i + 4] | 0})`;
+        if (code === 38) st.fg = rgb; else st.bg = rgb;
+        i += 4;
+      } else if ((code === 38 || code === 48) && parts[i + 1] === 5) {
+        i += 2; // indexed colour: rare here, leave to the block default
+      } else if (code >= 30 && code <= 37) st.fg = ANSI_16[code - 30];
+      else if (code >= 90 && code <= 97) st.fg = ANSI_16[code - 90 + 8];
+      else if (code >= 40 && code <= 47) st.bg = ANSI_16[code - 40];
+    }
+  }
+
+  const ANSI_16 = [
+    "#484f58", "#ff7b72", "#3fb950", "#e3b341", "#58a6ff", "#bc8cff", "#39c5cf", "#b1bac4",
+    "#6e7681", "#ffa198", "#56d364", "#e3b341", "#79c0ff", "#d2a8ff", "#56d4dd", "#f0f6fc",
+  ];
+
+  // Near-black foregrounds come from light-theme output and vanish on our
+  // dark background; let those inherit instead.
+  function tooDark(rgb) {
+    const m = /rgb\((\d+),(\d+),(\d+)\)/.exec(rgb || "");
+    if (!m) return false;
+    return (+m[1] * 0.299 + +m[2] * 0.587 + +m[3] * 0.114) < 40;
+  }
+
+  function runsToHtml(runs) {
+    return runs
+      .map((r) => {
+        if (!r.text) return "";
+        const css = [];
+        if (r.fg && !tooDark(r.fg)) css.push(`color:${r.fg}`);
+        if (r.bg) css.push(`background:${r.bg}`);
+        if (r.bold) css.push("font-weight:600");
+        if (r.italic) css.push("font-style:italic");
+        if (r.underline) css.push("text-decoration:underline");
+        const text = escapeHtml(r.text);
+        return css.length ? `<span style="${css.join(";")}">${text}</span>` : text;
+      })
+      .join("");
+  }
+
+  function runsText(runs) {
+    return runs.map((r) => r.text).join("");
+  }
+
+  // Trailing padding spaces would otherwise wrap on a narrow screen.
+  function rtrimRuns(runs) {
+    const out = runs.slice();
+    while (out.length) {
+      const last = out[out.length - 1];
+      const trimmed = last.text.replace(/\s+$/, "");
+      if (trimmed === last.text) break;
+      if (trimmed) { out[out.length - 1] = { ...last, text: trimmed }; break; }
+      out.pop();
+    }
+    return out;
+  }
   const MARKERS = [
     { re: /^❯/, cls: "user" },        // > user message / live input
     { re: /^⏺/, cls: "assistant" },   // assistant message or tool call
@@ -105,17 +207,59 @@
   }
 
   function parseTranscript(text) {
-    const raw = text.split("\n").map((l) => l.replace(/\s+$/, ""));
+    // Tokenise first: every later step works on the plain text, while the
+    // styled runs ride along so rendering can mirror the terminal's colours.
+    const st = { fg: null, bg: null, bold: false, italic: false, underline: false };
+    const rows = text.split("\n").map((line) => {
+      const runs = rtrimRuns(ansiRuns(line.replace(/\r/g, ""), st));
+      return { runs, text: runsText(runs) };
+    });
+    const raw = rows.map((r) => r.text);
 
     // Everything after the final rule is the agent's own status bar.
-    let lastRule = -1;
+    const ruleIdxs = [];
     raw.forEach((l, i) => {
-      if (ruleLabel(l.trim()) !== null) lastRule = i;
+      if (ruleLabel(l.trim()) !== null) ruleIdxs.push(i);
     });
+    const lastRule = ruleIdxs.length ? ruleIdxs[ruleIdxs.length - 1] : -1;
+    const prevRule = ruleIdxs.length > 1 ? ruleIdxs[ruleIdxs.length - 2] : -1;
+
+    /* The final pair of rules frames the terminal's own input box - whatever
+       is typed on the desktop, plus any autocomplete menu it has opened. That
+       is live UI state, not conversation, so it must not render as a past
+       user message. Lift it out and let the caller show it next to the phone's
+       own composer instead. */
+    let inputStart = -1;
+    let inputEnd = -1;
+    if (prevRule >= 0 && lastRule - prevRule <= 12) {
+      inputStart = prevRule + 1;
+      inputEnd = lastRule - 1;
+    }
+    // The status bar names the current mode; shift+tab cycles through them.
+    let mode = "";
+    if (lastRule >= 0) {
+      const tail = raw.slice(lastRule + 1).join(" ");
+      const m = /\b(auto|plan|manual|accept edits|bypass\w*)\s+mode\b/i.exec(tail);
+      if (m) mode = m[1].toLowerCase();
+    }
+
+    const liveInput =
+      inputStart >= 0
+        ? raw
+            .slice(inputStart, inputEnd + 1)
+            .join(" ")
+            .replace(/^[\s\u00a0]*❯[\s\u00a0]*/, "")
+            .replace(/\s+/g, " ")
+            .trim()
+        : "";
 
     const blocks = [];
     let current = "assistant";
     raw.forEach((line, i) => {
+      // Drop the input box's contents and its closing rule; the opening rule
+      // stays because it carries the session title.
+      if (inputStart >= 0 && i >= inputStart && i <= lastRule) return;
+
       const trimmed = line.trim();
       let cls = classifyLine(trimmed);
 
@@ -129,7 +273,7 @@
           if (label) prev.label = label;
           return;
         }
-        blocks.push({ cls: "rule", label, lines: [] });
+        blocks.push({ cls: "rule", label, rows: [] });
         return;
       }
 
@@ -140,21 +284,32 @@
       }
 
       const last = blocks[blocks.length - 1];
-      if (last && last.cls === cls) last.lines.push(line);
-      else blocks.push({ cls, lines: [line] });
+      if (last && last.cls === cls) last.rows.push(rows[i]);
+      else blocks.push({ cls, rows: [rows[i]] });
     });
 
     // Drop leading/trailing empties inside each block, then empty blocks.
-    return blocks.filter((b) => {
+    const kept = blocks.filter((b) => {
       if (b.cls === "rule") return true;
-      while (b.lines.length && !b.lines[0].trim()) b.lines.shift();
-      while (b.lines.length && !b.lines[b.lines.length - 1].trim()) b.lines.pop();
-      return b.lines.length > 0;
+      while (b.rows.length && !b.rows[0].text.trim()) b.rows.shift();
+      while (b.rows.length && !b.rows[b.rows.length - 1].text.trim()) b.rows.pop();
+      return b.rows.length > 0;
     });
+
+    return { blocks: kept, liveInput, mode };
+  }
+
+  /* What the desktop currently has typed into the pane, mirrored above the
+     phone's composer so the two inputs do not look like one. */
+  function renderLiveInput(textValue) {
+    const show = Boolean(textValue);
+    elTerminalInputRow.classList.toggle("hidden", !show);
+    if (show) elTerminalInput.textContent = textValue;
   }
 
   function renderTranscript(text) {
     if (!text) {
+      renderLiveInput("");
       elHistoryContent.innerHTML =
         '<div class="history-empty">(No output recorded yet)</div>';
       return;
@@ -162,28 +317,39 @@
 
     // Resolve each block to its final text, dropping the ones that render
     // to nothing: an empty input box, or the status bar when hidden.
+    const parsed = parseTranscript(text);
+    renderLiveInput(parsed.liveInput);
+    state.mode = parsed.mode;
+    elModeCurrent.textContent = parsed.mode || "unknown";
+
     const visible = [];
-    for (const b of parseTranscript(text)) {
+    for (const b of parsed.blocks) {
       if (b.cls === "rule") {
         visible.push({ cls: "rule", label: b.label });
         continue;
       }
       if (b.cls === "status" && !state.showStatusBar) continue;
 
-      let body = b.lines.join("\n");
-      if (b.cls === "status") {
-        // Status lines are padded across the full terminal width.
-        body = b.lines
-          .map((l) => l.trim().replace(/\s{3,}/g, "  ·  "))
-          .filter(Boolean)
-          .join("\n");
-      }
-      // A bare marker is an empty prompt box, not content.
-      if (!body.replace(/^[❯⏺⎿✻✽✳※]/, "").trim()) continue;
       // Tables need their padding; everywhere else a long run of rule glyphs
       // is decoration that would wrap across several phone lines.
-      if (b.cls !== "table") body = body.replace(RE_INLINE_RULE, "$1$1$1");
-      visible.push({ cls: b.cls, body });
+      const collapse = b.cls !== "table";
+      const rows = b.rows.map((row) => {
+        let runs = row.runs;
+        if (b.cls === "status") {
+          // Status lines are padded across the full terminal width.
+          runs = runs.map((r) => ({ ...r, text: r.text.replace(/\s{3,}/g, "  ·  ") }));
+        }
+        if (collapse) {
+          runs = runs.map((r) => ({ ...r, text: r.text.replace(RE_INLINE_RULE, "$1$1$1") }));
+        }
+        return runs;
+      });
+
+      const plain = rows.map(runsText).join("\n").trim();
+      // A bare marker is an empty prompt box, not content.
+      if (!plain.replace(/^[❯⏺⎿✻✽✳※]/, "").trim()) continue;
+
+      visible.push({ cls: b.cls, html: rows.map(runsToHtml).join("\n") });
     }
 
     // Separators only mean something between two blocks.
@@ -199,7 +365,7 @@
     const html = trimmed
       .map((b) => {
         if (b.cls !== "rule") {
-          return `<div class="t-block t-${b.cls}">${escapeHtml(b.body)}</div>`;
+          return `<div class="t-block t-${b.cls}">${b.html}</div>`;
         }
         return b.label
           ? `<div class="t-rule-label"><span>${escapeHtml(b.label)}</span></div>`
@@ -332,7 +498,7 @@
     if (!state.activePaneId) return;
 
     try {
-      const url = `/api/agents/${encodeURIComponent(state.activePaneId)}/history?lines=${state.linesCount}&source=recent_unwrapped`;
+      const url = `/api/agents/${encodeURIComponent(state.activePaneId)}/history?lines=${state.linesCount}&source=recent_unwrapped&format=ansi`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch history");
       const data = await res.json();
@@ -460,7 +626,7 @@
   async function copyHistory() {
     if (!state.historyText) return;
     try {
-      await navigator.clipboard.writeText(state.historyText);
+      await navigator.clipboard.writeText(state.historyText.replace(RE_SGR, ""));
       triggerHaptic();
       const origText = elBtnCopy.textContent;
       elBtnCopy.textContent = "Copied!";
@@ -474,9 +640,12 @@
 
   // Auto-resize textarea
   function autoResizeTextarea() {
+    const focused = elPromptInput.classList.contains("expanded");
+    const cap = focused
+      ? Math.max(140, Math.round(window.innerHeight * 0.4))
+      : 120;
     elPromptInput.style.height = "auto";
-    const newHeight = Math.min(elPromptInput.scrollHeight, 120);
-    elPromptInput.style.height = `${newHeight}px`;
+    elPromptInput.style.height = `${Math.min(elPromptInput.scrollHeight, cap)}px`;
     elBtnSend.disabled = elPromptInput.value.trim().length === 0;
   }
 
@@ -555,11 +724,27 @@
   elBtnScrollBottom.addEventListener("click", () => scrollToBottom(true));
 
   elPromptInput.addEventListener("input", autoResizeTextarea);
+  // Enter inserts a newline (iOS shows a return key); the button sends.
   elPromptInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       submitPrompt();
     }
+  });
+
+  // Give the composer room while it has focus.
+  elPromptInput.addEventListener("focus", () => {
+    elPromptInput.classList.add("expanded");
+    autoResizeTextarea();
+    setTimeout(() => {
+      syncViewportHeight();
+      scrollToBottom();
+    }, 150);
+  });
+
+  elPromptInput.addEventListener("blur", () => {
+    elPromptInput.classList.remove("expanded");
+    autoResizeTextarea();
   });
 
   elPromptForm.addEventListener("submit", submitPrompt);
@@ -571,6 +756,17 @@
   });
 
   elBtnEsc.addEventListener("click", () => sendKey("esc"));
+
+  // Pull the desktop's draft into the composer to carry on editing it here.
+  elBtnAdopt.addEventListener("click", () => {
+    const draft = elTerminalInput.textContent.trim();
+    if (!draft) return;
+    triggerHaptic();
+    const existing = elPromptInput.value.trim();
+    elPromptInput.value = existing ? `${existing} ${draft}` : draft;
+    elPromptInput.focus();
+    autoResizeTextarea();
+  });
   elBtnCopy.addEventListener("click", copyHistory);
 
   elLinesSelect.addEventListener("change", (e) => {
@@ -579,12 +775,35 @@
     fetchHistory(true);
   });
 
+  // shift+tab cycles the agent between auto, manual and plan mode.
+  elBtnCycleMode.addEventListener("click", async () => {
+    await sendKey("shift+tab");
+    setTimeout(() => fetchHistory(true), 400);
+  });
+
   elToggleStatusBar.addEventListener("change", (e) => {
     state.showStatusBar = e.target.checked;
     savePref("herdr.statusbar", state.showStatusBar ? "1" : "0");
     renderTranscript(state.historyText);
     scrollToBottom();
   });
+
+  /* iOS does not reliably reflow a fixed, dvh-sized layout when the keyboard
+     opens, which pushes the header off screen. Drive the height from the
+     visual viewport instead so the top bar stays put and the transcript, not
+     the chrome, is what shrinks. */
+  function syncViewportHeight() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    document.documentElement.style.setProperty("--app-height", `${vv.height}px`);
+    document.documentElement.style.setProperty("--app-offset", `${vv.offsetTop}px`);
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncViewportHeight);
+    window.visualViewport.addEventListener("scroll", syncViewportHeight);
+    syncViewportHeight();
+  }
 
   // Handle page visibility for battery savings & wake-up
   document.addEventListener("visibilitychange", () => {

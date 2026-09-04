@@ -63,7 +63,10 @@ html, body {
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  /* --app-height tracks the visual viewport (set in JS) so the keyboard
+     shrinks the transcript rather than pushing the header off screen. */
+  height: var(--app-height, 100dvh);
+  transform: translateY(var(--app-offset, 0px));
   width: 100vw;
   background-color: var(--bg-base);
 }
@@ -86,7 +89,12 @@ html, body {
 .header-gear {
   position: relative;
   flex-shrink: 0;
-  margin-top: 2px;
+}
+
+.app-header .dock-key {
+  height: 30px;
+  padding: 0 9px;
+  margin-left: 4px;
 }
 
 .conn-dot {
@@ -434,9 +442,75 @@ html, body {
 }
 
 /* Prompt Form */
-.prompt-form {
+/* Mirror of the desktop's own input line, so a prompt typed on the laptop is
+   visibly the terminal's and not something half-entered on the phone. */
+/* Row mirrors the composer below it: text on the left, a round action button
+   on the right at the same size and offset as Send, so the two line up. */
+.terminal-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 5px 0 0 0;
+}
+
+.terminal-input-row.hidden { display: none; }
+
+.btn-adopt {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  /* Secondary to Send: no chrome, just a faded glyph that holds the position. */
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  opacity: 0.55;
   display: flex;
   align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.2s;
+}
+
+.btn-adopt:active {
+  transform: scale(0.92);
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+.terminal-input {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+  /* Wrap: a long desktop prompt used to run off the right edge. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 4.4em;
+  overflow-y: auto;
+  align-items: flex-start;
+}
+
+.terminal-input::before {
+  content: "⌨";
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+
+
+.prompt-form {
+  display: flex;
+  align-items: flex-end;
   gap: 6px;
   padding: 5px 0;
   margin: 0;
@@ -487,6 +561,13 @@ html, body {
 }
 
 .prompt-input:focus { border-color: var(--accent-primary); }
+
+/* Focused composer gets room to breathe; height itself is set in JS. */
+.prompt-input.expanded {
+  min-height: 84px;
+  border-radius: 12px;
+  line-height: 21px;
+}
 
 .prompt-input::placeholder {
   color: var(--text-muted);
@@ -609,6 +690,25 @@ html, body {
   height: 20px;
   accent-color: var(--accent-primary);
 }
+
+.mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-btn:active { background: var(--bg-hover); }
+
+.mode-btn svg { color: var(--text-muted); }
 
 .sheet-actions {
   display: flex;

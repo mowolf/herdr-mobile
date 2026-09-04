@@ -28,6 +28,8 @@
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </button>
+      <button type="button" id="btn-esc" class="dock-key" title="Send Escape">esc</button>
+      <button type="button" id="btn-ctrl-c" class="dock-key danger-key" title="Send Interrupt (Ctrl+C)">^C</button>
       <button id="btn-settings" class="icon-btn header-gear" aria-label="Settings" title="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
@@ -52,15 +54,25 @@
 
     <!-- Bottom Input Dock -->
     <footer class="input-dock">
+      <!-- Mirrors whatever is typed into the pane on the desktop -->
+      <div id="terminal-input-row" class="terminal-input-row hidden">
+        <div id="terminal-input" class="terminal-input"></div>
+        <button type="button" id="btn-adopt" class="btn-adopt" aria-label="Copy the terminal's text into the composer" title="Copy into composer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+      </div>
+
       <form id="prompt-form" class="prompt-form">
-        <button type="button" id="btn-esc" class="dock-key" title="Send Escape">esc</button>
-        <button type="button" id="btn-ctrl-c" class="dock-key danger-key" title="Send Interrupt (Ctrl+C)">^C</button>
         <textarea
           id="prompt-input"
           class="prompt-input"
           rows="1"
           placeholder="Prompt or tap mic…"
-          enterkeyhint="send"
+          enterkeyhint="enter"
           autocomplete="off"
           autocorrect="on"
           spellcheck="true"
@@ -115,6 +127,16 @@
     <div class="sheet-row">
       <label for="toggle-statusbar">Show agent status bar</label>
       <input type="checkbox" id="toggle-statusbar">
+    </div>
+
+    <div class="sheet-row">
+      <label>Agent mode</label>
+      <button id="btn-cycle-mode" class="mode-btn" title="Send shift+tab">
+        <span id="mode-current">unknown</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+        </svg>
+      </button>
     </div>
 
     <div class="sheet-actions">
