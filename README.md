@@ -77,6 +77,42 @@ Homebrew-launched server can be silently unreachable from other devices.
 
 ---
 
+## Push Notifications (iOS)
+
+Get a notification when an agent stops working - the same moment the desktop
+chimes.
+
+1. Install the PWA to the iOS home screen (Web Push does not work in Safari
+   tabs, only in an installed PWA, iOS 16.4+).
+2. Open it from the home screen, then **gear -> Notify when an agent finishes**
+   and accept the iOS prompt.
+
+Delivery goes through Apple's push service rather than your tailnet, so alerts
+arrive on cellular with the phone locked. The gateway must be awake to send
+them - on a laptop that sleeps, run `caffeinate -s`.
+
+**Requires** the `openssl` binary (present on macOS and most Linux hosts).
+Python's standard library has no ECDSA, so the VAPID JWT is signed by shelling
+out to it. No pip packages are needed.
+
+VAPID keys and device subscriptions are generated on first use and stored, mode
+`600`, in `~/.config/herdr-mobile/` (override with `HERDR_STATE_DIR`). They are
+outside the repository and must never be committed. `HERDR_PUSH_SUB` sets the
+RFC 8292 contact sent to the push service.
+
+Pushes carry no payload: encrypting one requires ECDH + AES-GCM, which the
+standard library cannot do. Instead `sw.js` fetches `/api/agents` when it wakes
+and names whichever agent stopped, so notifications show the real project name.
+
+```bash
+curl -X POST http://127.0.0.1:3009/api/push/test   # fire a test push
+```
+
+`201` means the push service accepted it; `404`/`410` mean the subscription is
+dead and it is dropped automatically.
+
+---
+
 ## Exposing Multiple Apps & Dev Servers via Tailscale
 
 When coding agents start local development servers (e.g., Nuxt, Next.js, Vite), they often bind to common ports like `3000` or `5173`. Here is how they coexist cleanly with Herdr Mobile on your Tailnet:

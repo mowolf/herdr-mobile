@@ -710,6 +710,15 @@ html, body {
   color: var(--text-secondary);
 }
 
+.sheet-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.sheet-row input[type="checkbox"]:disabled { opacity: 0.4; }
+
 .sheet-agent-text {
   display: flex;
   flex-direction: column;

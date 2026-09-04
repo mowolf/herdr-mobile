@@ -6,14 +6,18 @@ Connects directly to the Herdr UNIX socket and serves a mobile-friendly PWA.
 
 import os
 import sys
+import time
 import json
 import socket
 import hashlib
+import threading
 import mimetypes
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, unquote
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+import push
 
 
 def default_socket_path() -> str:
@@ -167,6 +171,15 @@ class HerdrHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, "agents": agents})
             return
 
+        # API: VAPID public key + whether this device is already subscribed
+        if path == "/api/push/info":
+            self.send_json({
+                "ok": True,
+                "public_key": push.public_key_b64(),
+                "subscriptions": len(push.load_subs()),
+            })
+            return
+
         # API: Get history / output for a specific agent pane
         # /api/agents/{pane_id}/history
         if path.startswith("/api/agents/") and path.endswith("/history"):
@@ -221,6 +234,25 @@ class HerdrHandler(BaseHTTPRequestHandler):
             body = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
         except Exception:
             self.send_json({"ok": False, "error": "Invalid JSON"}, 400)
+            return
+
+        # API: Register a Web Push subscription
+        if path == "/api/push/subscribe":
+            sub = body.get("subscription") or body
+            if not sub.get("endpoint"):
+                self.send_json({"ok": False, "error": "Missing endpoint"}, 400)
+                return
+            self.send_json({"ok": True, "count": push.add_sub(sub)})
+            return
+
+        if path == "/api/push/unsubscribe":
+            endpoint = body.get("endpoint", "")
+            self.send_json({"ok": True, "count": push.remove_sub(endpoint)})
+            return
+
+        # API: Fire a push right now, to check the round trip from the phone
+        if path == "/api/push/test":
+            self.send_json({"ok": True, "sent": push.broadcast()})
             return
 
         # API: Create a workspace
@@ -369,10 +401,55 @@ class HerdrHandler(BaseHTTPRequestHandler):
         sys.stderr.write(f"[{self.log_date_time_string()}] {msg}\n")
 
 
+class StatusWatcher(threading.Thread):
+    """Notify when an agent stops working - the transition that chimes on the
+    desktop. Herdr's event stream is per-pane, so it would need constant
+    re-subscription as panes come and go; polling one cheap RPC over a local
+    UNIX socket is simpler and does not miss newly created panes."""
+
+    INTERVAL = 3.0
+    BUSY = {"working"}
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.previous = {}
+
+    def run(self):
+        # Skip the first sweep so a restart does not fire for agents that
+        # were already finished before we started watching.
+        self.previous = self.snapshot()
+        while True:
+            time.sleep(self.INTERVAL)
+            try:
+                current = self.snapshot()
+            except Exception:
+                continue
+            if any(
+                pane in self.previous
+                and self.previous[pane] in self.BUSY
+                and status not in self.BUSY
+                for pane, status in current.items()
+            ) and push.load_subs():
+                try:
+                    push.broadcast()
+                except Exception as e:
+                    print(f"push failed: {e}", file=sys.stderr)
+            self.previous = current
+
+    @staticmethod
+    def snapshot() -> dict:
+        res = call_herdr_rpc("agent.list")
+        return {
+            a.get("pane_id"): a.get("agent_status", "unknown")
+            for a in res.get("result", {}).get("agents", [])
+        }
+
+
 def run():
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     server_address = (HOST, PORT)
     httpd = ThreadingHTTPServer(server_address, HerdrHandler)
+    StatusWatcher().start()
     print(f"herdr-mobile listening on http://{HOST}:{PORT}")
     print(f"Herdr socket target: {HERDR_SOCKET_PATH}")
     try:

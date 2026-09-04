@@ -50,6 +50,8 @@
   const elSheet = document.getElementById("settings-sheet");
   const elSheetBackdrop = document.getElementById("sheet-backdrop");
   const elToggleStatusBar = document.getElementById("toggle-statusbar");
+  const elTogglePush = document.getElementById("toggle-push");
+  const elPushHint = document.getElementById("push-hint");
 
   // Haptic feedback helper
   function triggerHaptic(type = "light") {
@@ -937,6 +939,106 @@
     window.visualViewport.addEventListener("resize", syncViewportHeight);
     window.visualViewport.addEventListener("scroll", syncViewportHeight);
     syncViewportHeight();
+  }
+
+  /* Web Push. iOS only allows this for a PWA opened from the home screen,
+     and only when permission is requested inside a user gesture - hence the
+     toggle rather than an automatic prompt on load. */
+  function urlBase64ToUint8Array(base64) {
+    const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4))
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+    const raw = atob(padded);
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  }
+
+  function pushSupported() {
+    return "serviceWorker" in navigator && "PushManager" in window;
+  }
+
+  function setPushHint(text) {
+    elPushHint.textContent = text || "";
+  }
+
+  async function refreshPushState() {
+    if (!pushSupported()) {
+      elTogglePush.disabled = true;
+      setPushHint(
+        window.matchMedia("(display-mode: standalone)").matches
+          ? "not supported by this browser"
+          : "add to Home Screen first"
+      );
+      return;
+    }
+    if (Notification.permission === "denied") {
+      elTogglePush.disabled = true;
+      elTogglePush.checked = false;
+      setPushHint("blocked in iOS Settings");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      elTogglePush.checked = Boolean(sub);
+      setPushHint(sub ? "on for this device" : "");
+    } catch (err) {
+      setPushHint("unavailable");
+    }
+  }
+
+  async function enablePush() {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      elTogglePush.checked = false;
+      setPushHint(permission === "denied" ? "blocked in iOS Settings" : "not granted");
+      return;
+    }
+    const info = await (await fetch("/api/push/info")).json();
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(info.public_key),
+    });
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
+    setPushHint("on for this device");
+    triggerHaptic();
+  }
+
+  async function disablePush() {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await fetch("/api/push/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      });
+      await sub.unsubscribe();
+    }
+    setPushHint("");
+  }
+
+  elTogglePush.addEventListener("change", async (e) => {
+    try {
+      if (e.target.checked) await enablePush();
+      else await disablePush();
+    } catch (err) {
+      elTogglePush.checked = false;
+      setPushHint("failed: " + err.message);
+    }
+  });
+
+  if (pushSupported()) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then(refreshPushState)
+      .catch(() => setPushHint("service worker failed"));
+  } else {
+    refreshPushState();
   }
 
   // Handle page visibility for battery savings & wake-up
