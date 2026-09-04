@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Herdr Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  
+  <!-- Apple iOS Web App / PWA Capabilities -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Herdr">
+  <meta name="theme-color" content="#0d1117">
+  
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-top">
+        <div class="brand">
+          <span class="brand-logo">π</span>
+          <span class="brand-title">Herdr</span>
+        </div>
+        <div class="header-status">
+          <span id="conn-indicator" class="conn-dot connected" title="Connection status"></span>
+          <button id="btn-refresh" class="icon-btn" aria-label="Refresh" title="Refresh">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Agent Switcher Carousel -->
+      <div id="agent-bar" class="agent-bar" role="tablist" aria-label="Active agents">
+        <div class="agent-pill loading">Loading agents...</div>
+      </div>
+    </header>
+
+    <!-- Agent Context / Sub-header -->
+    <div id="agent-meta" class="agent-meta">
+      <div class="meta-left">
+        <span id="agent-title-text" class="meta-title">Select an agent</span>
+        <span id="agent-cwd-text" class="meta-cwd"></span>
+      </div>
+      <div class="meta-right">
+        <span id="agent-status-badge" class="status-badge status-unknown">--</span>
+      </div>
+    </div>
+
+    <!-- Scrollable Transcript -->
+    <main id="history-container" class="history-container">
+      <div id="history-content" class="history-content">
+        <div class="history-empty">No active agent selected.</div>
+      </div>
+      <!-- Floating Jump to Bottom Button -->
+      <button id="btn-scroll-bottom" class="btn-scroll-bottom hidden" aria-label="Jump to bottom">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <polyline points="19 12 12 19 5 12"></polyline>
+        </svg>
+      </button>
+    </main>
+
+    <!-- Bottom Input Dock -->
+    <footer class="input-dock">
+      <!-- Quick Keys Toolbar -->
+      <div class="quick-keys-bar">
+        <button id="btn-ctrl-c" class="quick-btn danger-btn" title="Send Interrupt (Ctrl+C)">^C Interrupt</button>
+        <button id="btn-esc" class="quick-btn" title="Send Escape">Esc</button>
+        <button id="btn-copy" class="quick-btn" title="Copy visible text">Copy</button>
+        <div class="lines-picker">
+          <label for="lines-select">Lines:</label>
+          <select id="lines-select">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+            <option value="400">400</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Text / Voice Input Form -->
+      <form id="prompt-form" class="prompt-form">
+        <textarea
+          id="prompt-input"
+          class="prompt-input"
+          rows="1"
+          placeholder="Prompt or tap mic for iOS dictation..."
+          enterkeyhint="send"
+          autocomplete="off"
+          autocorrect="on"
+          spellcheck="true"
+        ></textarea>
+        <button type="submit" id="btn-send" class="btn-send" aria-label="Send prompt" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </form>
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
