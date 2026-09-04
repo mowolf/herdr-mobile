@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.herdr.mobile</string>
+
+    <!-- System python3 is in the macOS firewall allowlist; Homebrew python is not. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>HERDR_MOBILE_DIR/server.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>HERDR_MOBILE_DIR</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOST</key>
+        <string>127.0.0.1</string>
+        <key>PORT</key>
+        <string>3009</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>HERDR_MOBILE_DIR/herdr-mobile.log</string>
+    <key>StandardErrorPath</key>
+    <string>HERDR_MOBILE_DIR/herdr-mobile.log</string>
+</dict>
+</plist>

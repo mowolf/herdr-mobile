@@ -14,7 +14,20 @@ from urllib.parse import urlparse, parse_qs, unquote
 from http import HTTPStatus
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
-HERDR_SOCKET_PATH = os.environ.get("HERDR_SOCKET", "/root/.config/herdr/herdr.sock")
+
+def default_socket_path() -> str:
+    """Locate herdr.sock: explicit env, then the current user's config dir, then root's."""
+    candidates = [
+        Path.home() / ".config/herdr/herdr.sock",
+        Path("/root/.config/herdr/herdr.sock"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+    return str(candidates[0])
+
+
+HERDR_SOCKET_PATH = os.environ.get("HERDR_SOCKET") or default_socket_path()
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "3009"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -71,16 +84,6 @@ class HerdrHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-        self.end_headers()
-        self.wfile.write(body)
-        body = json.dumps(data).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.end_headers()

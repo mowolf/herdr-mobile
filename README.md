@@ -21,13 +21,13 @@ iPhone (Safari PWA)
       │
       │ HTTPS (over Tailscale)
       ▼
-Tailscale Serve (https://herdr.<tailnet>.ts.net:8443 or :443)
+Tailscale Serve (https://<node>.<tailnet>.ts.net:8443 or :443)
       │
       ▼
 herdr-mobile gateway (server.py on internal port 3009)
       │
       ▼ UNIX domain socket
-Herdr Server (/root/.config/herdr/herdr.sock)
+Herdr Server (~/.config/herdr/herdr.sock)
 ```
 
 ---
@@ -43,14 +43,37 @@ Herdr Server (/root/.config/herdr/herdr.sock)
 ```bash
 python3 server.py
 ```
-Default internal port: `3009` (configurable via `PORT=3009`).
+Default internal port: `3009` (configurable via `PORT=3009`), bound to `127.0.0.1`.
 
-### 3. Run as Systemd Service (Autostart)
+The Herdr socket is located automatically: `HERDR_SOCKET` if set, otherwise
+`~/.config/herdr/herdr.sock`, falling back to `/root/.config/herdr/herdr.sock`.
+
+> **fish shell:** `VAR=value python3 server.py` does not set the variable in fish.
+> Use `env PORT=3009 python3 server.py` instead.
+
+### 3a. Autostart on Linux (systemd)
 ```bash
 sudo cp herdr-mobile.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now herdr-mobile.service
 ```
+
+### 3b. Autostart on macOS (launchd)
+```bash
+sed "s|HERDR_MOBILE_DIR|$PWD|g" com.herdr.mobile.plist > ~/Library/LaunchAgents/com.herdr.mobile.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.herdr.mobile.plist
+```
+Logs go to `herdr-mobile.log` in the repo directory. To check, restart, or remove:
+```bash
+launchctl print gui/$(id -u)/com.herdr.mobile
+launchctl kickstart -k gui/$(id -u)/com.herdr.mobile
+launchctl bootout gui/$(id -u)/com.herdr.mobile
+```
+
+The plist runs `/usr/bin/python3` (system Python) rather than a Homebrew Python
+deliberately: the macOS application firewall ships with `/usr/bin/python3`
+allowed for incoming connections, while a Homebrew interpreter is not — so a
+Homebrew-launched server can be silently unreachable from other devices.
 
 ---
 
@@ -66,14 +89,23 @@ Tailscale Serve supports multiple HTTPS ports with valid automated certificates:
 ```bash
 tailscale serve --bg --https=8443 http://127.0.0.1:3009
 ```
-* **Recommended for iPhone PWA**: Save `https://herdr.<tailnet>.ts.net:8443` to your iPhone home screen.
-* This leaves standard port `443` (`https://herdr.<tailnet>.ts.net`) completely free for whatever dev server you or an agent want to proxy!
+
+> **Prerequisite:** HTTPS certificates must be enabled for your tailnet
+> (admin console → **DNS** → **HTTPS Certificates** → Enable). Without it,
+> `tailscale serve --https` hangs and writes no config, and `tailscale cert`
+> reports *"your Tailscale account does not support getting TLS certs"*.
+> Verify with `tailscale status --json | grep CertDomains` — it must list your
+> node, not `null`.
+
+* **Recommended for iPhone PWA**: Save `https://<node>.<tailnet>.ts.net:8443` to your iPhone home screen
+  (find the exact name with `tailscale status --json | grep DNSName`).
+* This leaves standard port `443` (`https://<node>.<tailnet>.ts.net`) completely free for whatever dev server you or an agent want to proxy!
 
 ### 3. Direct Port Access on the Tailnet (No Proxy Needed)
 Tailscale operates as a secure mesh VPN. The firewall on `tailscale0` allows all incoming traffic from your tailnet. Any dev server bound to `0.0.0.0` is **immediately accessible over plain HTTP** directly from your iPhone browser:
-* Nuxt / Next.js: `http://herdr.<tailnet>.ts.net:3000`
-* Vite / Svelte: `http://herdr.<tailnet>.ts.net:5173`
-* Flask / FastAPI: `http://herdr.<tailnet>.ts.net:8000`
+* Nuxt / Next.js: `http://<node>.<tailnet>.ts.net:3000`
+* Vite / Svelte: `http://<node>.<tailnet>.ts.net:5173`
+* Flask / FastAPI: `http://<node>.<tailnet>.ts.net:8000`
 
 *(Note: Use HTTP for dev servers; only PWAs requiring home-screen installation and mic access need HTTPS via Tailscale Serve).*
 
@@ -110,9 +142,9 @@ tailscale serve reset
 1. Ensure Tailscale VPN is connected on your iPhone.
 2. Open Safari and navigate to:
    ```text
-   https://herdr.<tailnet>.ts.net:8443
+   https://<node>.<tailnet>.ts.net:8443
    ```
-   *(or `https://herdr.<tailnet>.ts.net` if using port 443)*
+   *(or `https://<node>.<tailnet>.ts.net` if using port 443)*
 3. Tap the **Share** button (box with upward arrow) at the bottom.
 4. Tap **"Add to Home Screen"**.
 5. Launch **Herdr** from your home screen as a standalone, distraction-free app.
