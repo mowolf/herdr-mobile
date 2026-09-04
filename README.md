@@ -6,10 +6,13 @@ A minimal, distraction-free mobile web interface for [Herdr](https://herdr.dev) 
 
 - **PWA for iOS**: Add to Home Screen for a native, full-screen iOS app feel without browser chrome.
 - **Native iOS Dictation**: Use native iOS voice-to-text directly from the virtual keyboard microphone into prompts.
-- **Scrollable History**: Live output transcript from active Herdr agent panes with auto-scroll and jump-to-bottom toggle.
-- **Agent Switcher**: Simple tap-to-switch carousel showing all active agents with live status badges (🟢 Idle, 🟡 Working, 🔴 Blocked).
-- **Tactile Quick Actions**: Send, `Ctrl+C` interrupt, `Esc`, and clipboard copy buttons.
-- **Zero-Dependency Gateway**: Single lightweight Python backend connecting directly to Herdr's UNIX domain socket (`herdr.sock`).
+- **Readable Transcript**: The pane's output is parsed into blocks and coloured by speaker, mirroring the terminal's own ANSI colours. Full-width rules collapse to hairlines and tables keep their alignment, so nothing wraps into a wall of dashes.
+- **Project Picker**: A dropdown naming the current project, with a full-screen list of every workspace and live status (🟢 Idle, 🟡 Working, 🔴 Blocked). Create a workspace with **New**; swipe a row left to close one.
+- **Key Palette**: `y`, `n`, `1`-`3`, arrows, tab and enter for the confirmation prompts agents stop on, plus `Esc` and `Ctrl+C`.
+- **Desktop Input Mirror**: Shows what is typed into the pane on the laptop, with one tap to pull it into the phone's composer.
+- **Push Notifications**: Get told when an agent finishes, even off the tailnet with the phone locked. See [Push Notifications](#push-notifications-ios).
+- **Agent Mode**: Cycle auto / manual / plan from settings without reaching for the laptop.
+- **Zero-Dependency Gateway**: Single lightweight Python backend connecting directly to Herdr's UNIX domain socket (`herdr.sock`). Standard library only; `openssl` is used for push signing.
 - **Secure by Default**: Served over your private Tailscale Tailnet with automated HTTPS.
 
 ---
