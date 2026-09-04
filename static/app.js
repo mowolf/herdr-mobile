@@ -24,6 +24,7 @@
   const elAgentPicker = document.getElementById("agent-picker");
   const elAgentList = document.getElementById("agent-list");
   const elBtnClosePicker = document.getElementById("btn-close-picker");
+  const elBtnNewWorkspace = document.getElementById("btn-new-workspace");
   const elAgentTitle = document.getElementById("agent-title-text");
   const elAgentCwd = document.getElementById("agent-cwd-text");
   const elAgentStatus = document.getElementById("agent-status-badge");
@@ -120,7 +121,9 @@
         if (code === 38) st.fg = rgb; else st.bg = rgb;
         i += 4;
       } else if ((code === 38 || code === 48) && parts[i + 1] === 5) {
-        i += 2; // indexed colour: rare here, leave to the block default
+        const c = xterm256(parts[i + 2] | 0);
+        if (code === 38) st.fg = c; else st.bg = c;
+        i += 2;
       } else if (code >= 30 && code <= 37) st.fg = ANSI_16[code - 30];
       else if (code >= 90 && code <= 97) st.fg = ANSI_16[code - 90 + 8];
       else if (code >= 40 && code <= 47) st.bg = ANSI_16[code - 40];
@@ -131,6 +134,19 @@
     "#484f58", "#ff7b72", "#3fb950", "#e3b341", "#58a6ff", "#bc8cff", "#39c5cf", "#b1bac4",
     "#6e7681", "#ffa198", "#56d364", "#e3b341", "#79c0ff", "#d2a8ff", "#56d4dd", "#f0f6fc",
   ];
+
+  /* xterm-256: the first 16 reuse our palette, 16-231 are a 6x6x6 cube and
+     232-255 are greys. Shell panes (fish, ls, git) colour with these. */
+  function xterm256(n) {
+    if (n < 16) return ANSI_16[n];
+    if (n < 232) {
+      const i = n - 16;
+      const lv = [0, 95, 135, 175, 215, 255];
+      return `rgb(${lv[Math.floor(i / 36) % 6]},${lv[Math.floor(i / 6) % 6]},${lv[i % 6]})`;
+    }
+    const g = 8 + (n - 232) * 10;
+    return `rgb(${g},${g},${g})`;
+  }
 
   // Near-black foregrounds come from light-theme output and vanish on our
   // dark background; let those inherit instead.
@@ -436,18 +452,57 @@
       .map((agent) => {
         const isActive = agent.pane_id === state.activePaneId;
         const status = agent.status || "unknown";
+        const subtitle = agent.title || agent.cwd || "";
         return `
-          <button class="agent-row ${isActive ? "active" : ""}" data-pane-id="${agent.pane_id}">
-            <span class="agent-dot ${status}"></span>
-            <span class="agent-row-text">
-              <span class="agent-row-name">${escapeHtml(agent.name || agent.pane_id)}</span>
-              <span class="agent-row-title">${escapeHtml(agent.title || agent.cwd || "")}</span>
-            </span>
-            <span class="status-badge status-${status}">${escapeHtml(status)}</span>
-          </button>
+          <div class="agent-row-wrap">
+            <button class="agent-row-delete" data-workspace-id="${agent.workspace_id}">Close</button>
+            <button class="agent-row ${isActive ? "active" : ""}" data-pane-id="${agent.pane_id}">
+              <span class="agent-dot ${status}"></span>
+              <span class="agent-row-text">
+                <span class="agent-row-name">${escapeHtml(agent.name || agent.pane_id)}</span>
+                <span class="agent-row-title">${escapeHtml(subtitle)}</span>
+              </span>
+              <span class="status-badge status-${status}">${escapeHtml(status)}</span>
+            </button>
+          </div>
         `;
       })
       .join("");
+  }
+
+  async function createWorkspace() {
+    triggerHaptic();
+    const before = new Set(state.agents.map((a) => a.workspace_id));
+    try {
+      const res = await fetch("/api/workspaces", { method: "POST" });
+      if (!res.ok) throw new Error("create failed");
+      await fetchAgents();
+      // Open the one that was not there a moment ago.
+      const created = state.agents.find((a) => !before.has(a.workspace_id));
+      if (created) selectAgent(created.pane_id);
+      else closePicker();
+    } catch (err) {
+      alert("Could not create workspace: " + err.message);
+    }
+  }
+
+  async function closeWorkspace(workspaceId) {
+    if (!workspaceId) return;
+    triggerHaptic("warning");
+    try {
+      const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/close`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("close failed");
+      if (state.agents.find((a) => a.pane_id === state.activePaneId)?.workspace_id === workspaceId) {
+        state.activePaneId = null;
+      }
+      resetSwipe();
+      await fetchAgents();
+      renderAgentList();
+    } catch (err) {
+      alert("Could not close workspace: " + err.message);
+    }
   }
 
   function openPicker() {
@@ -709,11 +764,68 @@
   elBtnClosePicker.addEventListener("click", closePicker);
 
   elAgentList.addEventListener("click", (e) => {
-    const row = e.target.closest(".agent-row");
-    if (row && row.dataset.paneId) {
-      selectAgent(row.dataset.paneId);
+    const del = e.target.closest(".agent-row-delete");
+    if (del) {
+      closeWorkspace(del.dataset.workspaceId);
+      return;
     }
+    const row = e.target.closest(".agent-row");
+    if (!row) return;
+    // A tap on a swiped-open row puts it back rather than selecting it.
+    if (row.classList.contains("swiped")) {
+      resetSwipe();
+      return;
+    }
+    if (row.dataset.paneId) selectAgent(row.dataset.paneId);
   });
+
+  /* Swipe a row left to reveal Close, iOS style. The reveal is the
+     confirmation step, so the second tap acts immediately. */
+  const SWIPE_WIDTH = 92;
+  let swipe = null;
+
+  function resetSwipe() {
+    elAgentList.querySelectorAll(".agent-row.swiped").forEach((r) => {
+      r.classList.remove("swiped");
+      r.style.transform = "";
+    });
+  }
+
+  elAgentList.addEventListener("touchstart", (e) => {
+    const row = e.target.closest(".agent-row");
+    if (!row) return;
+    if (!row.classList.contains("swiped")) resetSwipe();
+    swipe = { row, x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, axis: null };
+  }, { passive: true });
+
+  elAgentList.addEventListener("touchmove", (e) => {
+    if (!swipe) return;
+    const dx = e.touches[0].clientX - swipe.x;
+    const dy = e.touches[0].clientY - swipe.y;
+    if (swipe.axis === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      swipe.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    }
+    if (swipe.axis !== "x") return; // let the list scroll
+    const base = swipe.row.classList.contains("swiped") ? -SWIPE_WIDTH : 0;
+    swipe.dx = Math.max(-SWIPE_WIDTH, Math.min(0, base + dx));
+    swipe.row.style.transition = "none";
+    swipe.row.style.transform = `translateX(${swipe.dx}px)`;
+  }, { passive: true });
+
+  elAgentList.addEventListener("touchend", () => {
+    if (!swipe) return;
+    const { row, dx, axis } = swipe;
+    swipe = null;
+    if (axis !== "x") return;
+    row.style.transition = "";
+    const open = dx < -SWIPE_WIDTH / 2;
+    row.classList.toggle("swiped", open);
+    row.style.transform = open ? `translateX(${-SWIPE_WIDTH}px)` : "";
+    if (open) triggerHaptic();
+  }, { passive: true });
+
+  elBtnNewWorkspace.addEventListener("click", createWorkspace);
 
   elBtnRefresh.addEventListener("click", () => {
     triggerHaptic();

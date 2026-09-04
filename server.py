@@ -121,22 +121,34 @@ class HerdrHandler(BaseHTTPRequestHandler):
                 return
 
             agents_raw = res.get("result", {}).get("agents", [])
+            by_pane = {a.get("pane_id"): a for a in agents_raw}
 
-            # Workspace labels are what the desktop UI shows ("herdr-mobile",
-            # "ib-orbit"); agent.list only carries opaque ids like "w2:p1".
-            ws_res = call_herdr_rpc("workspace.list")
-            workspaces = {
-                w.get("workspace_id"): w
-                for w in ws_res.get("result", {}).get("workspaces", [])
-            }
+            # Drive the list from workspaces, not agents: a freshly created
+            # workspace has no agent yet and would otherwise be invisible.
+            # Workspace labels are also what the desktop UI shows
+            # ("herdr-mobile", "ib-orbit") - agent.list only carries ids.
+            ws_list = call_herdr_rpc("workspace.list").get("result", {}).get("workspaces", [])
+            panes = call_herdr_rpc("pane.list").get("result", {}).get("panes", [])
 
             agents = []
-            for a in agents_raw:
-                pane_id = a.get("pane_id") or ""
-                ws = workspaces.get(a.get("workspace_id"), {})
+            for ws in ws_list:
+                ws_id = ws.get("workspace_id")
+                ws_panes = [p for p in panes if p.get("workspace_id") == ws_id]
+                if not ws_panes:
+                    continue
+                # Prefer a pane running an agent, then the active tab's pane.
+                active_tab = ws.get("active_tab_id")
+                chosen = next((p for p in ws_panes if p.get("pane_id") in by_pane), None)
+                if chosen is None:
+                    chosen = next(
+                        (p for p in ws_panes if p.get("tab_id") == active_tab), ws_panes[0]
+                    )
+
+                pane_id = chosen.get("pane_id") or ""
+                a = by_pane.get(pane_id, {})
                 label = ws.get("label") or ""
                 # Disambiguate only when a workspace actually holds several panes.
-                if label and ws.get("pane_count", 1) > 1:
+                if label and len(ws_panes) > 1:
                     label = f"{label} \u00b7{pane_id.rsplit(':p', 1)[-1]}"
                 agents.append({
                     "pane_id": pane_id,
@@ -146,10 +158,11 @@ class HerdrHandler(BaseHTTPRequestHandler):
                     "agent": a.get("agent"),
                     "status": a.get("agent_status", "unknown"),
                     "title": a.get("terminal_title_stripped") or a.get("terminal_title") or "",
-                    "cwd": a.get("cwd", ""),
-                    "workspace_id": a.get("workspace_id"),
-                    "tab_id": a.get("tab_id"),
-                    "focused": a.get("focused", False),
+                    "cwd": a.get("cwd") or chosen.get("cwd", ""),
+                    "workspace_id": ws_id,
+                    "tab_id": chosen.get("tab_id"),
+                    "focused": ws.get("focused", False),
+                    "has_agent": pane_id in by_pane,
                 })
             self.send_json({"ok": True, "agents": agents})
             return
@@ -209,6 +222,27 @@ class HerdrHandler(BaseHTTPRequestHandler):
         except Exception:
             self.send_json({"ok": False, "error": "Invalid JSON"}, 400)
             return
+
+        # API: Create a workspace
+        if path == "/api/workspaces":
+            res = call_herdr_rpc("workspace.create", {})
+            if "error" in res:
+                self.send_json(res, 400)
+                return
+            self.send_json({"ok": True, "result": res.get("result", {})})
+            return
+
+        # API: Close a workspace
+        # /api/workspaces/{workspace_id}/close
+        if path.startswith("/api/workspaces/") and path.endswith("/close"):
+            parts = path.split("/")
+            if len(parts) == 5:
+                res = call_herdr_rpc("workspace.close", {"workspace_id": unquote(parts[3])})
+                if "error" in res:
+                    self.send_json(res, 400)
+                    return
+                self.send_json({"ok": True})
+                return
 
         # API: Send prompt to agent
         # /api/agents/{pane_id}/prompt

@@ -183,9 +183,28 @@ html, body {
 }
 
 .picker-title {
+  flex: 1;
   font-size: 17px;
   font-weight: 700;
 }
+
+.picker-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 4px;
+  padding: 7px 13px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 16px;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.picker-new:active { filter: brightness(0.9); }
 
 .agent-list {
   flex: 1;
@@ -194,13 +213,40 @@ html, body {
   padding: 8px 12px max(12px, var(--safe-bottom)) 12px;
 }
 
+/* Row sits in a clipping wrapper so the Close action can hide behind it. */
+.agent-row-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.agent-row-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 92px;
+  border: none;
+  background: var(--status-blocked);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agent-row-delete:active { filter: brightness(0.88); }
+
 .agent-row {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 14px;
-  margin-bottom: 8px;
+  transition: transform 0.2s ease;
+  touch-action: pan-y;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
