@@ -61,7 +61,20 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now herdr-mobile.service
 ```
 
-### 3b. Autostart on macOS (launchd)
+### 3b. Menu bar app (macOS, recommended)
+
+[`herdr-menubar/`](herdr-menubar) is a small Apple Silicon menu bar app that
+runs the gateway, brings Tailscale up, and holds `caffeinate -s` so the Mac
+stays awake — an asleep Mac cannot send push notifications, so alerts would
+silently never arrive. One toggle drives all three.
+
+```bash
+make -C herdr-menubar install   # then add it to Login Items
+```
+
+It cannot share the port with the launchd agent below; use one or the other.
+
+### 3c. Autostart on macOS (launchd)
 ```bash
 sed "s|HERDR_MOBILE_DIR|$PWD|g" com.herdr.mobile.plist > ~/Library/LaunchAgents/com.herdr.mobile.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.herdr.mobile.plist
