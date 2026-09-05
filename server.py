@@ -79,6 +79,55 @@ def call_herdr_rpc(method: str, params: dict = None, timeout: float = 5.0) -> di
         s.close()
 
 
+
+def build_agent_rows(ws_list: list, panes: list, agents_raw: list) -> list:
+    """One row per pane running an agent, grouped under its workspace.
+
+    A workspace can hold several agents at once; listing only the first hides
+    the rest entirely. When a workspace has no agent running, it still gets a
+    single row for its active tab's pane so it stays reachable - that is what
+    makes a freshly created workspace visible.
+    """
+    by_pane = {a.get("pane_id"): a for a in agents_raw}
+    rows = []
+
+    for ws in ws_list:
+        ws_id = ws.get("workspace_id")
+        ws_panes = [p for p in panes if p.get("workspace_id") == ws_id]
+        if not ws_panes:
+            continue
+
+        active_tab = ws.get("active_tab_id")
+        chosen_panes = [p for p in ws_panes if p.get("pane_id") in by_pane]
+        if not chosen_panes:
+            chosen_panes = [
+                next((p for p in ws_panes if p.get("tab_id") == active_tab), ws_panes[0])
+            ]
+
+        for chosen in chosen_panes:
+            pane_id = chosen.get("pane_id") or ""
+            a = by_pane.get(pane_id, {})
+            label = ws.get("label") or ""
+            # Disambiguate only when this workspace contributes several rows.
+            if label and len(chosen_panes) > 1:
+                label = f"{label} \u00b7{pane_id.rsplit(':p', 1)[-1]}"
+            rows.append({
+                "pane_id": pane_id,
+                "name": label or a.get("name") or pane_id,
+                "workspace_label": ws.get("label") or "",
+                "workspace_number": ws.get("number"),
+                "agent": a.get("agent"),
+                "status": a.get("agent_status", "unknown"),
+                "title": a.get("terminal_title_stripped") or a.get("terminal_title") or "",
+                "cwd": a.get("cwd") or chosen.get("cwd", ""),
+                "workspace_id": ws_id,
+                "tab_id": chosen.get("tab_id"),
+                "focused": ws.get("focused", False),
+                "has_agent": pane_id in by_pane,
+            })
+    return rows
+
+
 class HerdrHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -125,7 +174,6 @@ class HerdrHandler(BaseHTTPRequestHandler):
                 return
 
             agents_raw = res.get("result", {}).get("agents", [])
-            by_pane = {a.get("pane_id"): a for a in agents_raw}
 
             # Drive the list from workspaces, not agents: a freshly created
             # workspace has no agent yet and would otherwise be invisible.
@@ -134,40 +182,7 @@ class HerdrHandler(BaseHTTPRequestHandler):
             ws_list = call_herdr_rpc("workspace.list").get("result", {}).get("workspaces", [])
             panes = call_herdr_rpc("pane.list").get("result", {}).get("panes", [])
 
-            agents = []
-            for ws in ws_list:
-                ws_id = ws.get("workspace_id")
-                ws_panes = [p for p in panes if p.get("workspace_id") == ws_id]
-                if not ws_panes:
-                    continue
-                # Prefer a pane running an agent, then the active tab's pane.
-                active_tab = ws.get("active_tab_id")
-                chosen = next((p for p in ws_panes if p.get("pane_id") in by_pane), None)
-                if chosen is None:
-                    chosen = next(
-                        (p for p in ws_panes if p.get("tab_id") == active_tab), ws_panes[0]
-                    )
-
-                pane_id = chosen.get("pane_id") or ""
-                a = by_pane.get(pane_id, {})
-                label = ws.get("label") or ""
-                # Disambiguate only when a workspace actually holds several panes.
-                if label and len(ws_panes) > 1:
-                    label = f"{label} \u00b7{pane_id.rsplit(':p', 1)[-1]}"
-                agents.append({
-                    "pane_id": pane_id,
-                    "name": label or a.get("name") or pane_id,
-                    "workspace_label": ws.get("label") or "",
-                    "workspace_number": ws.get("number"),
-                    "agent": a.get("agent"),
-                    "status": a.get("agent_status", "unknown"),
-                    "title": a.get("terminal_title_stripped") or a.get("terminal_title") or "",
-                    "cwd": a.get("cwd") or chosen.get("cwd", ""),
-                    "workspace_id": ws_id,
-                    "tab_id": chosen.get("tab_id"),
-                    "focused": ws.get("focused", False),
-                    "has_agent": pane_id in by_pane,
-                })
+            agents = build_agent_rows(ws_list, panes, agents_raw)
             self.send_json({"ok": True, "agents": agents})
             return
 
@@ -239,10 +254,12 @@ class HerdrHandler(BaseHTTPRequestHandler):
         # API: Register a Web Push subscription
         if path == "/api/push/subscribe":
             sub = body.get("subscription") or body
-            if not sub.get("endpoint"):
-                self.send_json({"ok": False, "error": "Missing endpoint"}, 400)
+            try:
+                count = push.add_sub(sub)
+            except ValueError as e:
+                self.send_json({"ok": False, "error": str(e)}, 400)
                 return
-            self.send_json({"ok": True, "count": push.add_sub(sub)})
+            self.send_json({"ok": True, "count": count})
             return
 
         if path == "/api/push/unsubscribe":

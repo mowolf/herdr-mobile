@@ -18,6 +18,7 @@ import os
 import json
 import time
 import base64
+import threading
 import subprocess
 import urllib.request
 import urllib.error
@@ -29,6 +30,23 @@ KEY_PATH = STATE_DIR / "vapid_private.pem"
 SUBS_PATH = STATE_DIR / "subscriptions.json"
 # RFC 8292 wants a contact for the push service; a URL is as valid as a mailto.
 VAPID_SUB = os.environ.get("HERDR_PUSH_SUB", "https://github.com/mowolf/herdr-mobile")
+
+# subscriptions.json is touched by request threads and the status watcher, so
+# every read-modify-write goes through this lock.
+_LOCK = threading.Lock()
+
+
+def valid_endpoint(endpoint: str) -> bool:
+    """Endpoints arrive as client JSON and are later fetched by the server, so
+    an unvalidated one is an SSRF primitive: anything that can POST to
+    /api/push/subscribe could aim the gateway at a loopback or LAN address and
+    have it fire on every agent completion. Real push services are always
+    https, so require exactly that."""
+    try:
+        parsed = urlparse(endpoint)
+    except Exception:
+        return False
+    return parsed.scheme == "https" and bool(parsed.hostname)
 
 
 def b64url(data: bytes) -> str:
@@ -95,35 +113,57 @@ def _vapid_header(endpoint: str) -> str:
     return f"vapid t={jwt}, k={public_key_b64()}"
 
 
-def load_subs() -> list:
+def _read_subs() -> list:
     try:
-        return json.loads(SUBS_PATH.read_text())
+        data = json.loads(SUBS_PATH.read_text())
+        return data if isinstance(data, list) else []
     except Exception:
         return []
 
 
-def save_subs(subs: list) -> None:
+def _write_subs(subs: list) -> None:
+    """Atomic swap: a crash mid-write must not leave a truncated file behind."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    SUBS_PATH.write_text(json.dumps(subs, indent=2))
-    SUBS_PATH.chmod(0o600)
+    tmp = SUBS_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(subs, indent=2))
+    tmp.chmod(0o600)
+    os.replace(tmp, SUBS_PATH)
+
+
+def load_subs() -> list:
+    with _LOCK:
+        return _read_subs()
+
+
+def save_subs(subs: list) -> None:
+    with _LOCK:
+        _write_subs(subs)
 
 
 def add_sub(sub: dict) -> int:
-    subs = [s for s in load_subs() if s.get("endpoint") != sub.get("endpoint")]
-    subs.append(sub)
-    save_subs(subs)
-    return len(subs)
+    if not valid_endpoint(sub.get("endpoint", "")):
+        raise ValueError("endpoint must be an https URL")
+    with _LOCK:
+        subs = [s for s in _read_subs() if s.get("endpoint") != sub.get("endpoint")]
+        subs.append(sub)
+        _write_subs(subs)
+        return len(subs)
 
 
 def remove_sub(endpoint: str) -> int:
-    subs = [s for s in load_subs() if s.get("endpoint") != endpoint]
-    save_subs(subs)
-    return len(subs)
+    with _LOCK:
+        subs = [s for s in _read_subs() if s.get("endpoint") != endpoint]
+        _write_subs(subs)
+        return len(subs)
 
 
 def send_one(sub: dict, ttl: int = 120) -> int:
-    """Return the push service's status code; 404/410 mean the sub is dead."""
+    """Return the push service's status code; 404/410 mean the sub is dead.
+    0 means the request never completed, which says nothing about the
+    subscription's validity - so it is never treated as a reason to drop it."""
     endpoint = sub.get("endpoint", "")
+    if not valid_endpoint(endpoint):
+        return 0
     req = urllib.request.Request(endpoint, data=b"", method="POST")
     req.add_header("Authorization", _vapid_header(endpoint))
     req.add_header("TTL", str(ttl))
@@ -134,17 +174,25 @@ def send_one(sub: dict, ttl: int = 120) -> int:
             return res.status
     except urllib.error.HTTPError as e:
         return e.code
+    except (urllib.error.URLError, TimeoutError, OSError):
+        # An unreachable push service must not abort the whole broadcast and
+        # strand every subscriber queued behind this one.
+        return 0
 
 
 def broadcast() -> dict:
-    """Push to every subscription, dropping the ones the service rejects."""
+    """Push to every subscription, dropping only the ones the service says are
+    gone. Network failures leave the subscription in place."""
+    subs = load_subs()
     results = {}
-    alive = []
-    for sub in load_subs():
+    dead = set()
+    for sub in subs:
+        endpoint = sub.get("endpoint", "")
         code = send_one(sub)
-        results[sub.get("endpoint", "")[-24:]] = code
-        if code not in (404, 410):
-            alive.append(sub)
-    if len(alive) != len(load_subs()):
-        save_subs(alive)
+        results[endpoint[-24:]] = code
+        if code in (404, 410):
+            dead.add(endpoint)
+    if dead:
+        with _LOCK:
+            _write_subs([s for s in _read_subs() if s.get("endpoint") not in dead])
     return results

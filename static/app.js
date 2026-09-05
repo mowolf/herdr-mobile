@@ -490,6 +490,14 @@
 
   async function closeWorkspace(workspaceId) {
     if (!workspaceId) return;
+    const target = state.agents.find((a) => a.workspace_id === workspaceId);
+    const name = target ? target.name : "this workspace";
+    // Closing kills every agent inside, and a stray swipe on a phone is cheap
+    // to make and expensive to undo.
+    if (!confirm(`Close ${name}? Any agents running in it will be stopped.`)) {
+      resetSwipe();
+      return;
+    }
     triggerHaptic("warning");
     try {
       const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/close`, {
