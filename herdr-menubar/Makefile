@@ -3,7 +3,7 @@ APP     := HerdrMenuBar
 BUNDLE  := build/$(APP).app
 TARGET  := arm64-apple-macos13.0
 
-.PHONY: all run install clean
+.PHONY: all run install login unlogin clean
 
 all: $(BUNDLE)
 
@@ -22,6 +22,19 @@ install: $(BUNDLE)
 	rm -rf /Applications/$(APP).app
 	cp -R $(BUNDLE) /Applications/
 	@echo "installed to /Applications/$(APP).app"
+
+# Start at login. A LaunchAgent rather than a Login Item because scripting
+# System Events needs Automation permission that cannot be prompted for here.
+login: install
+	cp com.herdr.menubar.plist ~/Library/LaunchAgents/
+	-launchctl bootout gui/$$(id -u)/com.herdr.menubar 2>/dev/null
+	launchctl bootstrap gui/$$(id -u) ~/Library/LaunchAgents/com.herdr.menubar.plist
+	@echo "will start at login"
+
+unlogin:
+	-launchctl bootout gui/$$(id -u)/com.herdr.menubar
+	rm -f ~/Library/LaunchAgents/com.herdr.menubar.plist
+	@echo "removed from login"
 
 clean:
 	rm -rf build

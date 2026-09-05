@@ -19,8 +19,15 @@ when off.
 ```bash
 make          # build/HerdrMenuBar.app
 make run      # build and launch
-make install  # copy to /Applications, so it can be added to Login Items
+make install  # copy to /Applications
+make login    # install and start at login
+make unlogin  # stop starting at login
 ```
+
+`make login` installs a small LaunchAgent that runs `open -a HerdrMenuBar`
+rather than adding a Login Item: scripting System Events to add one requires
+Automation permission that a script cannot prompt for. `open` re-uses a running
+instance, so logging in never starts a second copy.
 
 No Xcode project and no dependencies — a single `clang` invocation against
 AppKit. It is written in Objective-C rather than Swift deliberately: Command
