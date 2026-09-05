@@ -4,61 +4,54 @@
   <meta charset="UTF-8">
   <title>Herdr Mobile</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-  
+
   <!-- Apple iOS Web App / PWA Capabilities -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Herdr">
-  <meta name="theme-color" content="#0d1117">
-  
+  <meta name="theme-color" content="#12151d">
+
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon.svg">
-  
+
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div id="app" class="app-container">
-    <!-- Top Header -->
+    <!-- Agent switcher: the only thing in the top bar -->
     <header class="app-header">
-      <div class="header-top">
-        <div class="brand">
-          <span class="brand-logo">π</span>
-          <span class="brand-title">Herdr</span>
-        </div>
-        <div class="header-status">
-          <span id="conn-indicator" class="conn-dot connected" title="Connection status"></span>
-          <button id="btn-refresh" class="icon-btn" aria-label="Refresh" title="Refresh">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Agent Switcher Carousel -->
-      <div id="agent-bar" class="agent-bar" role="tablist" aria-label="Active agents">
-        <div class="agent-pill loading">Loading agents...</div>
-      </div>
+      <button id="agent-select" class="agent-select" aria-haspopup="dialog" aria-label="Choose project">
+        <span id="agent-select-dot" class="agent-dot unknown"></span>
+        <span id="agent-select-name" class="agent-select-name">Loading…</span>
+        <svg class="agent-select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      <button type="button" id="btn-keys" class="icon-btn header-keys" aria-label="Key palette" title="Key palette">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+          <line x1="6" y1="10" x2="6" y2="10"></line>
+          <line x1="10" y1="10" x2="10" y2="10"></line>
+          <line x1="14" y1="10" x2="14" y2="10"></line>
+          <line x1="18" y1="10" x2="18" y2="10"></line>
+          <line x1="8" y1="14" x2="16" y2="14"></line>
+        </svg>
+      </button>
+      <button id="btn-settings" class="icon-btn header-gear" aria-label="Settings" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span id="conn-indicator" class="conn-dot connected" title="Connection status"></span>
+      </button>
     </header>
-
-    <!-- Agent Context / Sub-header -->
-    <div id="agent-meta" class="agent-meta">
-      <div class="meta-left">
-        <span id="agent-title-text" class="meta-title">Select an agent</span>
-        <span id="agent-cwd-text" class="meta-cwd"></span>
-      </div>
-      <div class="meta-right">
-        <span id="agent-status-badge" class="status-badge status-unknown">--</span>
-      </div>
-    </div>
 
     <!-- Scrollable Transcript -->
     <main id="history-container" class="history-container">
       <div id="history-content" class="history-content">
         <div class="history-empty">No active agent selected.</div>
       </div>
-      <!-- Floating Jump to Bottom Button -->
       <button id="btn-scroll-bottom" class="btn-scroll-bottom hidden" aria-label="Jump to bottom">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -69,36 +62,51 @@
 
     <!-- Bottom Input Dock -->
     <footer class="input-dock">
-      <!-- Quick Keys Toolbar -->
-      <div class="quick-keys-bar">
-        <button id="btn-ctrl-c" class="quick-btn danger-btn" title="Send Interrupt (Ctrl+C)">^C Interrupt</button>
-        <button id="btn-esc" class="quick-btn" title="Send Escape">Esc</button>
-        <button id="btn-copy" class="quick-btn" title="Copy visible text">Copy</button>
-        <div class="lines-picker">
-          <label for="lines-select">Lines:</label>
-          <select id="lines-select">
-            <option value="50">50</option>
-            <option value="100" selected>100</option>
-            <option value="200">200</option>
-            <option value="400">400</option>
-          </select>
+      <!-- Keys the agent asks for at confirmation prompts -->
+      <div id="keys-bar" class="keys-bar">
+        <div class="keys-row">
+          <button type="button" id="btn-esc" class="key-btn" title="Send Escape">esc</button>
+          <button type="button" id="btn-ctrl-c" class="key-btn key-no" title="Send Interrupt (Ctrl+C)">^C</button>
+          <button type="button" class="key-btn key-yes" data-key="y">y</button>
+          <button type="button" class="key-btn key-no" data-key="n">n</button>
+          <button type="button" class="key-btn key-enter" data-key="enter">⏎</button>
+        </div>
+        <div class="keys-row">
+          <button type="button" class="key-btn" data-key="1">1</button>
+          <button type="button" class="key-btn" data-key="2">2</button>
+          <button type="button" class="key-btn" data-key="3">3</button>
+          <button type="button" class="key-btn" data-key="up">↑</button>
+          <button type="button" class="key-btn" data-key="down">↓</button>
+          <button type="button" class="key-btn" data-key="tab">⇥</button>
         </div>
       </div>
 
-      <!-- Text / Voice Input Form -->
+      <!-- Mirrors whatever is typed into the pane on the desktop -->
+      <div id="terminal-input-row" class="terminal-input-row hidden">
+        <div id="terminal-input" class="terminal-input"></div>
+        <button type="button" id="btn-adopt" class="btn-adopt" aria-label="Copy the terminal's text into the composer" title="Copy into composer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+      </div>
+
       <form id="prompt-form" class="prompt-form">
         <textarea
           id="prompt-input"
           class="prompt-input"
           rows="1"
-          placeholder="Prompt or tap mic for iOS dictation..."
-          enterkeyhint="send"
+          placeholder="Prompt or tap mic…"
+          enterkeyhint="enter"
           autocomplete="off"
           autocorrect="on"
+          autocapitalize="none"
           spellcheck="true"
         ></textarea>
         <button type="submit" id="btn-send" class="btn-send" aria-label="Send prompt" disabled>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"></line>
             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
           </svg>
@@ -106,6 +114,81 @@
       </form>
     </footer>
   </div>
+
+  <!-- Full-screen project picker -->
+  <section id="agent-picker" class="agent-picker hidden" role="dialog" aria-label="Projects">
+    <header class="picker-head">
+      <span class="picker-title">Projects</span>
+      <button id="btn-new-workspace" class="picker-new" aria-label="New workspace">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        New
+      </button>
+      <button id="btn-close-picker" class="icon-btn" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </header>
+    <div id="agent-list" class="agent-list"></div>
+  </section>
+
+  <!-- Settings sheet -->
+  <div id="sheet-backdrop" class="sheet-backdrop hidden"></div>
+  <section id="settings-sheet" class="settings-sheet hidden" aria-label="Settings">
+    <div class="sheet-grip"></div>
+
+    <div class="sheet-row sheet-agent">
+      <div class="sheet-agent-text">
+        <span id="agent-title-text" class="sheet-title">No agent selected</span>
+        <span id="agent-cwd-text" class="sheet-cwd"></span>
+      </div>
+      <span id="agent-status-badge" class="status-badge status-unknown">--</span>
+    </div>
+
+    <div class="sheet-row">
+      <label for="lines-select">Scrollback</label>
+      <select id="lines-select">
+        <option value="50">50 lines</option>
+        <option value="100" selected>100 lines</option>
+        <option value="200">200 lines</option>
+        <option value="400">400 lines</option>
+      </select>
+    </div>
+
+    <div class="sheet-row">
+      <label for="toggle-statusbar">Show agent status bar</label>
+      <input type="checkbox" id="toggle-statusbar">
+    </div>
+
+    <div class="sheet-row">
+      <label for="toggle-push">
+        Notify when an agent finishes
+        <span id="push-hint" class="sheet-hint"></span>
+      </label>
+      <input type="checkbox" id="toggle-push">
+    </div>
+
+    <div class="sheet-row">
+      <label>Agent mode</label>
+      <button id="btn-cycle-mode" class="mode-btn" title="Send shift+tab">
+        <span id="mode-current">unknown</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="sheet-actions">
+      <button id="btn-refresh" class="sheet-btn">Refresh</button>
+      <button id="btn-copy" class="sheet-btn">Copy transcript</button>
+    </div>
+
+    <button id="btn-close-sheet" class="sheet-btn sheet-close">Done</button>
+  </section>
 
   <script src="/app.js"></script>
 </body>

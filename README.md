@@ -6,10 +6,13 @@ A minimal, distraction-free mobile web interface for [Herdr](https://herdr.dev) 
 
 - **PWA for iOS**: Add to Home Screen for a native, full-screen iOS app feel without browser chrome.
 - **Native iOS Dictation**: Use native iOS voice-to-text directly from the virtual keyboard microphone into prompts.
-- **Scrollable History**: Live output transcript from active Herdr agent panes with auto-scroll and jump-to-bottom toggle.
-- **Agent Switcher**: Simple tap-to-switch carousel showing all active agents with live status badges (🟢 Idle, 🟡 Working, 🔴 Blocked).
-- **Tactile Quick Actions**: Send, `Ctrl+C` interrupt, `Esc`, and clipboard copy buttons.
-- **Zero-Dependency Gateway**: Single lightweight Python backend connecting directly to Herdr's UNIX domain socket (`herdr.sock`).
+- **Readable Transcript**: The pane's output is parsed into blocks and coloured by speaker, mirroring the terminal's own ANSI colours. Full-width rules collapse to hairlines and tables keep their alignment, so nothing wraps into a wall of dashes.
+- **Project Picker**: A dropdown naming the current project, with a full-screen list of every workspace and live status (🟢 Idle, 🟡 Working, 🔴 Blocked). Create a workspace with **New**; swipe a row left to close one.
+- **Key Palette**: `y`, `n`, `1`-`3`, arrows, tab and enter for the confirmation prompts agents stop on, plus `Esc` and `Ctrl+C`.
+- **Desktop Input Mirror**: Shows what is typed into the pane on the laptop, with one tap to pull it into the phone's composer.
+- **Push Notifications**: Get told when an agent finishes, even off the tailnet with the phone locked. See [Push Notifications](#push-notifications-ios).
+- **Agent Mode**: Cycle auto / manual / plan from settings without reaching for the laptop.
+- **Zero-Dependency Gateway**: Single lightweight Python backend connecting directly to Herdr's UNIX domain socket (`herdr.sock`). Standard library only; `openssl` is used for push signing.
 - **Secure by Default**: Served over your private Tailscale Tailnet with automated HTTPS.
 
 ---
@@ -21,13 +24,13 @@ iPhone (Safari PWA)
       │
       │ HTTPS (over Tailscale)
       ▼
-Tailscale Serve (https://herdr.<tailnet>.ts.net:8443 or :443)
+Tailscale Serve (https://<node>.<tailnet>.ts.net:8443 or :443)
       │
       ▼
 herdr-mobile gateway (server.py on internal port 3009)
       │
       ▼ UNIX domain socket
-Herdr Server (/root/.config/herdr/herdr.sock)
+Herdr Server (~/.config/herdr/herdr.sock)
 ```
 
 ---
@@ -43,14 +46,86 @@ Herdr Server (/root/.config/herdr/herdr.sock)
 ```bash
 python3 server.py
 ```
-Default internal port: `3009` (configurable via `PORT=3009`).
+Default internal port: `3009` (configurable via `PORT=3009`), bound to `127.0.0.1`.
 
-### 3. Run as Systemd Service (Autostart)
+The Herdr socket is located automatically: `HERDR_SOCKET` if set, otherwise
+`~/.config/herdr/herdr.sock`, falling back to `/root/.config/herdr/herdr.sock`.
+
+> **fish shell:** `VAR=value python3 server.py` does not set the variable in fish.
+> Use `env PORT=3009 python3 server.py` instead.
+
+### 3a. Autostart on Linux (systemd)
 ```bash
 sudo cp herdr-mobile.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now herdr-mobile.service
 ```
+
+### 3b. Menu bar app (macOS, recommended)
+
+[`herdr-menubar/`](herdr-menubar) is a small Apple Silicon menu bar app that
+runs the gateway, brings Tailscale up, and holds `caffeinate -s` so the Mac
+stays awake — an asleep Mac cannot send push notifications, so alerts would
+silently never arrive. One toggle drives all three.
+
+```bash
+make -C herdr-menubar install   # then add it to Login Items
+```
+
+It cannot share the port with the launchd agent below; use one or the other.
+
+### 3c. Autostart on macOS (launchd)
+```bash
+sed "s|HERDR_MOBILE_DIR|$PWD|g" com.herdr.mobile.plist > ~/Library/LaunchAgents/com.herdr.mobile.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.herdr.mobile.plist
+```
+Logs go to `herdr-mobile.log` in the repo directory. To check, restart, or remove:
+```bash
+launchctl print gui/$(id -u)/com.herdr.mobile
+launchctl kickstart -k gui/$(id -u)/com.herdr.mobile
+launchctl bootout gui/$(id -u)/com.herdr.mobile
+```
+
+The plist runs `/usr/bin/python3` (system Python) rather than a Homebrew Python
+deliberately: the macOS application firewall ships with `/usr/bin/python3`
+allowed for incoming connections, while a Homebrew interpreter is not — so a
+Homebrew-launched server can be silently unreachable from other devices.
+
+---
+
+## Push Notifications (iOS)
+
+Get a notification when an agent stops working - the same moment the desktop
+chimes.
+
+1. Install the PWA to the iOS home screen (Web Push does not work in Safari
+   tabs, only in an installed PWA, iOS 16.4+).
+2. Open it from the home screen, then **gear -> Notify when an agent finishes**
+   and accept the iOS prompt.
+
+Delivery goes through Apple's push service rather than your tailnet, so alerts
+arrive on cellular with the phone locked. The gateway must be awake to send
+them - on a laptop that sleeps, run `caffeinate -s`.
+
+**Requires** the `openssl` binary (present on macOS and most Linux hosts).
+Python's standard library has no ECDSA, so the VAPID JWT is signed by shelling
+out to it. No pip packages are needed.
+
+VAPID keys and device subscriptions are generated on first use and stored, mode
+`600`, in `~/.config/herdr-mobile/` (override with `HERDR_STATE_DIR`). They are
+outside the repository and must never be committed. `HERDR_PUSH_SUB` sets the
+RFC 8292 contact sent to the push service.
+
+Pushes carry no payload: encrypting one requires ECDH + AES-GCM, which the
+standard library cannot do. Instead `sw.js` fetches `/api/agents` when it wakes
+and names whichever agent stopped, so notifications show the real project name.
+
+```bash
+curl -X POST http://127.0.0.1:3009/api/push/test   # fire a test push
+```
+
+`201` means the push service accepted it; `404`/`410` mean the subscription is
+dead and it is dropped automatically.
 
 ---
 
@@ -66,14 +141,23 @@ Tailscale Serve supports multiple HTTPS ports with valid automated certificates:
 ```bash
 tailscale serve --bg --https=8443 http://127.0.0.1:3009
 ```
-* **Recommended for iPhone PWA**: Save `https://herdr.<tailnet>.ts.net:8443` to your iPhone home screen.
-* This leaves standard port `443` (`https://herdr.<tailnet>.ts.net`) completely free for whatever dev server you or an agent want to proxy!
+
+> **Prerequisite:** HTTPS certificates must be enabled for your tailnet
+> (admin console → **DNS** → **HTTPS Certificates** → Enable). Without it,
+> `tailscale serve --https` hangs and writes no config, and `tailscale cert`
+> reports *"your Tailscale account does not support getting TLS certs"*.
+> Verify with `tailscale status --json | grep CertDomains` — it must list your
+> node, not `null`.
+
+* **Recommended for iPhone PWA**: Save `https://<node>.<tailnet>.ts.net:8443` to your iPhone home screen
+  (find the exact name with `tailscale status --json | grep DNSName`).
+* This leaves standard port `443` (`https://<node>.<tailnet>.ts.net`) completely free for whatever dev server you or an agent want to proxy!
 
 ### 3. Direct Port Access on the Tailnet (No Proxy Needed)
 Tailscale operates as a secure mesh VPN. The firewall on `tailscale0` allows all incoming traffic from your tailnet. Any dev server bound to `0.0.0.0` is **immediately accessible over plain HTTP** directly from your iPhone browser:
-* Nuxt / Next.js: `http://herdr.<tailnet>.ts.net:3000`
-* Vite / Svelte: `http://herdr.<tailnet>.ts.net:5173`
-* Flask / FastAPI: `http://herdr.<tailnet>.ts.net:8000`
+* Nuxt / Next.js: `http://<node>.<tailnet>.ts.net:3000`
+* Vite / Svelte: `http://<node>.<tailnet>.ts.net:5173`
+* Flask / FastAPI: `http://<node>.<tailnet>.ts.net:8000`
 
 *(Note: Use HTTP for dev servers; only PWAs requiring home-screen installation and mic access need HTTPS via Tailscale Serve).*
 
@@ -110,9 +194,9 @@ tailscale serve reset
 1. Ensure Tailscale VPN is connected on your iPhone.
 2. Open Safari and navigate to:
    ```text
-   https://herdr.<tailnet>.ts.net:8443
+   https://<node>.<tailnet>.ts.net:8443
    ```
-   *(or `https://herdr.<tailnet>.ts.net` if using port 443)*
+   *(or `https://<node>.<tailnet>.ts.net` if using port 443)*
 3. Tap the **Share** button (box with upward arrow) at the bottom.
 4. Tap **"Add to Home Screen"**.
 5. Launch **Herdr** from your home screen as a standalone, distraction-free app.

@@ -23,6 +23,14 @@
   --status-done: #58a6ff;
   --status-unknown: #8b949e;
 
+  /* Transcript roles */
+  --role-user: #7ee787;
+  --role-user-bg: rgba(126, 231, 135, 0.07);
+  --role-assistant: #d1d7e0;
+  --role-tool: #8b949e;
+  --role-meta: #a371f7;
+  --role-tip: #58a6ff;
+
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --font-mono: "SF Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
 
@@ -40,7 +48,9 @@
 html, body {
   width: 100%;
   height: 100%;
-  background-color: var(--bg-base);
+  /* Matches the input dock so the home-indicator strip never reads as a
+     black band in standalone (home screen) mode. */
+  background-color: var(--bg-surface);
   color: var(--text-primary);
   font-family: var(--font-sans);
   overflow: hidden;
@@ -53,69 +63,49 @@ html, body {
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  /* --app-height tracks the visual viewport (set in JS) so the keyboard
+     shrinks the transcript rather than pushing the header off screen. */
+  height: var(--app-height, 100dvh);
+  transform: translateY(var(--app-offset, 0px));
   width: 100vw;
   background-color: var(--bg-base);
 }
 
-/* Header */
+/* Header: agent switcher + settings gear, no branding */
 .app-header {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: rgba(18, 21, 29, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-subtle);
   padding-top: var(--safe-top);
+  padding-right: 8px;
   z-index: 10;
 }
 
-.header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px 8px 16px;
+.header-gear {
+  position: relative;
+  flex-shrink: 0;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.brand-logo {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--accent-primary);
-}
-
-.brand-title {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-}
-
-.header-status {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 
 .conn-dot {
-  width: 8px;
-  height: 8px;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--status-unknown);
+  border: 1.5px solid var(--bg-surface);
   transition: background 0.3s;
 }
 
-.conn-dot.connected {
-  background: var(--status-idle);
-  box-shadow: 0 0 8px rgba(63, 185, 80, 0.4);
-}
-
-.conn-dot.disconnected {
-  background: var(--status-blocked);
-}
+.conn-dot.connected { background: var(--status-idle); }
+.conn-dot.disconnected { background: var(--status-blocked); }
 
 .icon-btn {
   background: transparent;
@@ -124,7 +114,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  padding: 8px;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -134,46 +124,167 @@ html, body {
   color: var(--text-primary);
 }
 
-/* Agent Carousel Bar */
-.agent-bar {
+/* Header project selector */
+.agent-select {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  overflow-x: auto;
-  gap: 8px;
-  padding: 4px 16px 10px 16px;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.agent-bar::-webkit-scrollbar {
-  display: none;
-}
-
-.agent-pill {
-  flex-shrink: 0;
-  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 12px;
+  gap: 8px;
+  margin: 6px 0 6px 10px;
+  padding: 7px 10px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
   user-select: none;
 }
 
-.agent-pill:active {
-  transform: scale(0.97);
+.agent-select:active { background: var(--bg-hover); }
+
+.agent-select-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.agent-pill.active {
-  background: var(--bg-hover);
-  border-color: var(--accent-primary);
+.agent-select-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* Full-screen project picker */
+.agent-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+}
+
+.agent-picker.hidden { display: none; }
+
+.picker-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.picker-title {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.picker-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 4px;
+  padding: 7px 13px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 16px;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.picker-new:active { filter: brightness(0.9); }
+
+.agent-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 12px max(12px, var(--safe-bottom)) 12px;
+}
+
+/* Row sits in a clipping wrapper so the Close action can hide behind it. */
+.agent-row-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.agent-row-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 92px;
+  border: none;
+  background: var(--status-blocked);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agent-row-delete:active { filter: brightness(0.88); }
+
+.agent-row {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px;
+  transition: transform 0.2s ease;
+  touch-action: pan-y;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
   color: var(--text-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-row:active { background: var(--bg-hover); }
+
+.agent-row.active {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.agent-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-row-name {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-row-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .agent-dot {
@@ -189,61 +300,14 @@ html, body {
   animation: pulse-dot 1.5s infinite;
 }
 
-.agent-dot.idle {
-  background: var(--status-idle);
-}
-
-.agent-dot.blocked {
-  background: var(--status-blocked);
-  animation: pulse-dot 1s infinite;
-}
-
-.agent-dot.done {
-  background: var(--status-done);
-}
-
-.agent-dot.unknown {
-  background: var(--status-unknown);
-}
+.agent-dot.idle { background: var(--status-idle); }
+.agent-dot.blocked { background: var(--status-blocked); animation: pulse-dot 1s infinite; }
+.agent-dot.done { background: var(--status-done); }
+.agent-dot.unknown { background: var(--status-unknown); }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(1.2); }
-}
-
-/* Agent Meta info */
-.agent-meta {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 16px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 12px;
-}
-
-.meta-left {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.meta-title {
-  font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.meta-cwd {
-  color: var(--text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .status-badge {
@@ -268,7 +332,7 @@ html, body {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 12px 14px 16px 14px;
+  padding: 10px 12px 12px 12px;
   position: relative;
 }
 
@@ -276,9 +340,98 @@ html, body {
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.45;
+  color: var(--role-assistant);
+}
+
+/* Transcript blocks, coloured by speaker */
+.t-block {
   white-space: pre-wrap;
   word-break: break-word;
-  color: #d1d7e0;
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+}
+
+.t-assistant {
+  color: var(--role-assistant);
+}
+
+.t-user {
+  color: var(--role-user);
+  background: var(--role-user-bg);
+  border-left: 2px solid var(--role-user);
+  border-radius: 0 6px 6px 0;
+  padding: 6px 10px;
+  margin: 10px 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.t-tool {
+  color: var(--role-tool);
+  font-size: 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.t-meta {
+  color: var(--role-meta);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.t-tip {
+  color: var(--role-tip);
+  font-size: 12px;
+}
+
+.t-status {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+/* Tables keep their alignment and scroll sideways instead of wrapping. */
+.t-table {
+  white-space: pre;
+  overflow-x: auto;
+  font-size: 11px;
+  color: var(--role-tool);
+  padding-bottom: 2px;
+}
+
+/* The terminal's full-width input-box borders become a hairline. */
+.t-rule {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 12px 0;
+}
+
+/* Same, but the border carried the session title. */
+.t-rule-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 10px 0;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.t-rule-label::before,
+.t-rule-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.t-rule-label span {
+  flex-shrink: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.3px;
 }
 
 .history-empty {
@@ -291,9 +444,9 @@ html, body {
 
 /* Floating Jump to Bottom Button */
 .btn-scroll-bottom {
-  position: absolute;
+  position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: calc(56px + var(--safe-bottom));
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -309,9 +462,7 @@ html, body {
   transition: opacity 0.2s, transform 0.2s;
 }
 
-.btn-scroll-bottom:active {
-  transform: scale(0.92);
-}
+.btn-scroll-bottom:active { transform: scale(0.92); }
 
 .btn-scroll-bottom.hidden {
   opacity: 0;
@@ -322,83 +473,146 @@ html, body {
 /* Bottom Input Dock */
 .input-dock {
   flex-shrink: 0;
-  background: rgba(18, 21, 29, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--bg-surface);
   border-top: 1px solid var(--border-subtle);
-  padding: 8px 12px;
-  padding-bottom: max(8px, var(--safe-bottom));
+  /* No vertical padding: the input row sits flush against the bottom edge.
+     The home-indicator inset is reclaimed entirely - iOS keeps the indicator
+     legible over content on its own. */
+  padding: 0 10px 0 10px;
   z-index: 10;
 }
 
-.quick-keys-bar {
+/* Prompt Form */
+/* Mirror of the desktop's own input line, so a prompt typed on the laptop is
+   visibly the terminal's and not something half-entered on the phone. */
+/* Key palette: single keypresses for the agent's confirmation prompts. */
+.keys-bar {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 2px 0;
 }
 
-.quick-btn {
+.keys-bar.hidden { display: none; }
+
+/* Two fixed rows: every key stays reachable without a sideways swipe. */
+.keys-row {
+  display: flex;
+  gap: 6px;
+}
+
+.key-btn {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 9px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
 }
 
-.quick-btn:active {
+.key-btn:active { background: var(--bg-hover); transform: scale(0.94); }
+
+.key-yes { color: var(--status-idle); border-color: rgba(63, 185, 80, 0.35); }
+.key-no { color: #ff7b72; border-color: rgba(248, 81, 73, 0.3); }
+.key-enter { color: var(--accent-primary); border-color: rgba(47, 129, 247, 0.4); }
+
+.header-keys.active {
   background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+/* Row mirrors the composer below it: text on the left, a round action button
+   on the right at the same size and offset as Send, so the two line up. */
+.terminal-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 5px 0 0 0;
+}
+
+.terminal-input-row.hidden { display: none; }
+
+.btn-adopt {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  /* Secondary to Send: no chrome, just a faded glyph that holds the position. */
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  opacity: 0.55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.2s;
+}
+
+.btn-adopt:active {
+  transform: scale(0.92);
+  opacity: 1;
   color: var(--text-primary);
 }
 
-.danger-btn {
-  color: #ff7b72;
-  border-color: rgba(248, 81, 73, 0.3);
-}
-
-.danger-btn:active {
-  background: rgba(248, 81, 73, 0.2);
-}
-
-.lines-picker {
-  margin-left: auto;
+.terminal-input {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.lines-picker select {
+  gap: 6px;
+  padding: 5px 9px;
   background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  border-radius: 6px;
-  padding: 2px 4px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
   font-size: 12px;
-  outline: none;
+  line-height: 1.35;
+  /* Wrap: a long desktop prompt used to run off the right edge. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 4.4em;
+  overflow-y: auto;
+  align-items: flex-start;
 }
 
-/* Prompt Form */
+.terminal-input::before {
+  content: "⌨";
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+
+
 .prompt-form {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 6px;
+  padding: 5px 0;
+  margin: 0;
 }
+
+
+
+
 
 .prompt-input {
   flex: 1;
+  min-width: 0;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  padding: 10px 14px;
+  border-radius: 18px;
+  padding: 8px 12px;
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 16px; /* 16px keeps iOS from zooming on focus */
+  line-height: 18px;
   color: var(--text-primary);
   resize: none;
   max-height: 120px;
@@ -406,8 +620,13 @@ html, body {
   transition: border-color 0.2s;
 }
 
-.prompt-input:focus {
-  border-color: var(--accent-primary);
+.prompt-input:focus { border-color: var(--accent-primary); }
+
+/* Focused composer gets room to breathe; height itself is set in JS. */
+.prompt-input.expanded {
+  min-height: 84px;
+  border-radius: 12px;
+  line-height: 21px;
 }
 
 .prompt-input::placeholder {
@@ -416,8 +635,8 @@ html, body {
 }
 
 .btn-send {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--accent-gradient);
   border: none;
@@ -431,12 +650,160 @@ html, body {
   box-shadow: 0 2px 8px rgba(47, 129, 247, 0.4);
 }
 
-.btn-send:active {
-  transform: scale(0.92);
+/* The paper-plane glyph's mass sits up and right inside its viewBox, so a
+   flex-centred icon reads as off-centre; nudge it back. */
+.btn-send svg {
+  display: block;
+  transform: translate(-1px, 1px);
 }
+
+.btn-send:active { transform: scale(0.92); }
 
 .btn-send:disabled {
   opacity: 0.3;
   cursor: default;
   box-shadow: none;
+}
+
+/* Settings sheet */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 20;
+}
+
+.settings-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 21;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-strong);
+  border-radius: 16px 16px 0 0;
+  padding: 8px 16px max(16px, var(--safe-bottom)) 16px;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.settings-sheet.hidden,
+.sheet-backdrop.hidden {
+  display: none;
+}
+
+.sheet-grip {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  margin: 4px auto 12px auto;
+}
+
+.sheet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.sheet-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.sheet-row input[type="checkbox"]:disabled { opacity: 0.4; }
+
+.sheet-agent-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sheet-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-cwd {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl; /* keep the tail of long paths visible */
+  text-align: left;
+}
+
+.sheet-row select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.sheet-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent-primary);
+}
+
+.mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-btn:active { background: var(--bg-hover); }
+
+.mode-btn svg { color: var(--text-muted); }
+
+.sheet-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.sheet-btn {
+  flex: 1;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sheet-btn:active { background: var(--bg-hover); }
+
+.sheet-close {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--accent-primary);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
 }
