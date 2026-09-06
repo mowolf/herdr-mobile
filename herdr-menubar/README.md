@@ -1,6 +1,7 @@
-# HerdrMenuBar
+# SheepIt.app
 
-A menu bar switch for the herdr-mobile gateway on Apple Silicon macOS.
+The macOS half of **Sheep It**: a menu bar switch for the herdr-mobile gateway
+on Apple Silicon.
 
 One toggle drives the four things the phone needs, which otherwise have to be
 started by hand and drift out of step:
@@ -17,17 +18,22 @@ asset: solid when the gateway is running, slashed and dimmed when it is off. It
 is a template image, so the menu bar tints it for light and dark - which is why
 the head is told from the fleece by a cut-out gap rather than by colour.
 
+The Finder icon is the phone's home screen sheep. `make-icns.py` wraps
+`static/icon.svg` in the rounded rectangle macOS expects - unlike iOS, macOS
+does not mask an icon for you - and rasterises it with `qlmanage`, so there is
+one sheep to edit rather than two.
+
 ## Build
 
 ```bash
-make          # build/HerdrMenuBar.app
+make          # build/SheepIt.app
 make run      # build and launch
 make install  # copy to /Applications
 make login    # install and start at login
 make unlogin  # stop starting at login
 ```
 
-`make login` installs a small LaunchAgent that runs `open -a HerdrMenuBar`
+`make login` installs a small LaunchAgent that runs `open -a SheepIt`
 rather than adding a Login Item: scripting System Events to add one requires
 Automation permission that a script cannot prompt for. `open` re-uses a running
 instance, so logging in never starts a second copy.
@@ -36,6 +42,19 @@ No Xcode project and no dependencies — a single `clang` invocation against
 AppKit. It is written in Objective-C rather than Swift deliberately: Command
 Line Tools installs that carry a stale `SwiftBridging` modulemap fail every
 Swift AppKit build, and clang is unaffected.
+
+### Replacing an older build
+
+The menu bar icon is drawn by the binary, so **a copy left running keeps
+drawing its own icon** however many times the app is replaced on disk - which
+is what makes a rebuild look like it did nothing. `make install` therefore
+quits any running copy first, and also removes the app and LaunchAgent under
+the previous `HerdrMenuBar` / `com.herdr.menubar` names, so the rename does not
+leave two sheep in the bar. Relaunch with `make run`, or `make login` to
+reinstate the login agent under its new label.
+
+Finder caches app icons separately: if it still shows the old one after the
+install, `killall Finder`.
 
 ## Notes
 

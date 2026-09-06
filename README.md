@@ -71,7 +71,7 @@ sudo systemctl enable --now herdr-mobile.service
 
 ### 3b. Menu bar app (macOS, recommended)
 
-[`herdr-menubar/`](herdr-menubar) is a small Apple Silicon menu bar app that
+[`herdr-menubar/`](herdr-menubar) builds **SheepIt.app**, a small Apple Silicon menu bar app that
 runs the gateway, starts `herdr server` if no Herdr is listening, brings
 Tailscale up, and holds `caffeinate -s` so the Mac stays awake — an asleep Mac
 cannot send push notifications, so alerts would silently never arrive. One
@@ -83,6 +83,10 @@ and agent, so stopping it is `herdr server stop`.
 ```bash
 make -C herdr-menubar install   # then add it to Login Items
 ```
+
+It replaces an earlier `HerdrMenuBar.app` and quits any copy still running -
+the menu bar icon is drawn by the binary, so a live instance keeps drawing its
+own however many times the app is replaced on disk.
 
 It cannot share the port with the launchd agent below; use one or the other.
 

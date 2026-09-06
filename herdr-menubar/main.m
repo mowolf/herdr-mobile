@@ -1,4 +1,4 @@
-// HerdrMenuBar - a menu bar switch for the herdr-mobile gateway.
+// SheepIt - a menu bar switch for the herdr-mobile gateway.
 //
 // Owns two child processes and keeps them in step:
 //   * the gateway itself (server.py), so the phone has something to talk to
