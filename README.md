@@ -116,7 +116,8 @@ changes — for anything noncommercial. Personal and hobby use, study, charities
 schools and public institutions are all covered.
 
 Selling it, or using it as part of a commercial product or service, is not.
-For that, ask: <moritz@moritzwolf.com>.
+For that, open an issue on
+[GitHub](https://github.com/mowolf/herdr-mobile/issues) and ask.
 
 Note this is a *source-available* licence, not an open-source one — the
 noncommercial restriction is exactly what the OSI definition disallows. If you

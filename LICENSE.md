@@ -71,7 +71,3 @@ The **licensor** is the individual or entity offering these terms, and the **sof
 **Your licenses** are all the licenses granted to you for the software under these terms.
 
 **Use** means anything you do with the software requiring one of your licenses.
-
----
-
-Required Notice: Copyright 2026 Moritz Wolf (https://github.com/mowolf)
