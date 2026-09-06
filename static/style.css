@@ -317,16 +317,27 @@ html, body {
 .sheep-ear { stroke-width: 1; }
 .sheep-eye { fill: var(--bg-card); }
 
+/* A shut eye for a sleeping sheep: the lid takes the card's colour so it reads
+   as a closed lid rather than a stray mark on the face. */
+.sheep-lid {
+  fill: none;
+  stroke: var(--bg-card);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+}
+
 .agent-row.active .sheep-face,
 .agent-row.active .sheep-ear { stroke: var(--bg-hover); }
 
 .agent-row.active .sheep-eye { fill: var(--bg-hover); }
+.agent-row.active .sheep-lid { stroke: var(--bg-hover); }
 
 .sheep-wrap.idle { color: var(--status-idle); }
 .sheep-wrap.done { color: var(--status-done); }
 .sheep-wrap.unknown { color: var(--status-unknown); }
 
-/* Working sheep graze; a blocked one looks up and waits to be answered. */
+/* The postures move the way they should: a grazing sheep munches, a blocked one
+   twitches for attention, a sleeping one only breathes. */
 .sheep-wrap.working {
   color: var(--status-working);
   animation: sheep-graze 2.4s ease-in-out infinite;
@@ -335,6 +346,10 @@ html, body {
 .sheep-wrap.blocked {
   color: var(--status-blocked);
   animation: sheep-alert 1.2s ease-in-out infinite;
+}
+
+.sheep-wrap.unknown {
+  animation: sheep-breathe 3.6s ease-in-out infinite;
 }
 
 @keyframes sheep-graze {
@@ -347,9 +362,15 @@ html, body {
   50% { transform: scale(1.08); opacity: 0.75; }
 }
 
+@keyframes sheep-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sheep-wrap.working,
-  .sheep-wrap.blocked { animation: none; }
+  .sheep-wrap.blocked,
+  .sheep-wrap.unknown { animation: none; }
 }
 
 .agent-dot {

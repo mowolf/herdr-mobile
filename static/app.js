@@ -576,24 +576,63 @@
     if (!elAgentPicker.classList.contains("hidden")) renderAgentList();
   }
 
-  /* One sheep per project, fleece coloured by what the agent is doing - the
-     same flock the home screen icon shows one of. Drawn inline so the fleece
-     can inherit the row's colour instead of shipping five copies of the file. */
-  function sheepSvg() {
+  /* One sheep per project, the same animal the home screen icon shows. Colour
+     carries the status, but so does the posture: an agent that is working
+     grazes, one that has stopped stands with its head up, one that is blocked
+     pricks its ears at you, and a pane with no agent at all lies down and
+     sleeps. Drawn inline so the fleece can inherit the row's colour instead of
+     shipping five copies of the file. */
+  const POSE = {
+    working: "graze",
+    idle: "stand",
+    done: "stand",
+    blocked: "alert",
+    unknown: "sleep",
+  };
+
+  function sheepBody(dy, legs) {
+    return `
+      <g fill="currentColor" transform="translate(0 ${dy})">
+        ${legs ? '<rect x="11" y="21" width="5" height="12" rx="2.5"/>' : ""}
+        ${legs ? '<rect x="23" y="21" width="5" height="12" rx="2.5"/>' : ""}
+        <circle cx="11.5" cy="16" r="7.5"/>
+        <circle cx="18" cy="11" r="8"/>
+        <circle cx="25.5" cy="11.5" r="7.5"/>
+        <circle cx="31" cy="16" r="7"/>
+        <rect x="5" y="13" width="27" height="13" rx="6.5"/>
+      </g>`;
+  }
+
+  const HEADS = {
+    // Head down in the grass.
+    graze: `
+      <ellipse class="sheep-ear" cx="33.2" cy="15.2" rx="3" ry="1.8" transform="rotate(-42 33.2 15.2)"/>
+      <ellipse class="sheep-face" cx="36.6" cy="19.4" rx="5.4" ry="4.6"/>
+      <circle class="sheep-eye" cx="38.2" cy="18" r="1.2"/>`,
+    // Head up, ear resting: done, waiting on you.
+    stand: `
+      <ellipse class="sheep-ear" cx="32.4" cy="9" rx="3" ry="1.8" transform="rotate(-38 32.4 9)"/>
+      <ellipse class="sheep-face" cx="36.4" cy="12.6" rx="5.4" ry="4.6"/>
+      <circle class="sheep-eye" cx="38.2" cy="11.4" r="1.2"/>`,
+    // Ear pricked straight up: something is asking for an answer.
+    alert: `
+      <ellipse class="sheep-ear" cx="33.6" cy="6.2" rx="3.2" ry="1.7" transform="rotate(-72 33.6 6.2)"/>
+      <ellipse class="sheep-face" cx="36.8" cy="10.2" rx="5.4" ry="4.6"/>
+      <circle class="sheep-eye" cx="38.6" cy="8.8" r="1.3"/>`,
+    // Lying down, eye shut, legs folded under.
+    sleep: `
+      <ellipse class="sheep-ear" cx="32.6" cy="20.4" rx="3" ry="1.8" transform="rotate(-30 32.6 20.4)"/>
+      <ellipse class="sheep-face" cx="36.4" cy="24.6" rx="5.4" ry="4.6"/>
+      <path class="sheep-lid" d="M36.4 24.2 q1.6 1.4 3.2 0"/>`,
+  };
+
+  function sheepSvg(status) {
+    const pose = POSE[status] || POSE.unknown;
+    const asleep = pose === "sleep";
     return `
       <svg class="sheep" viewBox="0 0 44 34" aria-hidden="true">
-        <g fill="currentColor">
-          <rect x="11" y="21" width="5" height="12" rx="2.5"/>
-          <rect x="23" y="21" width="5" height="12" rx="2.5"/>
-          <circle cx="11.5" cy="16" r="7.5"/>
-          <circle cx="18" cy="11" r="8"/>
-          <circle cx="25.5" cy="11.5" r="7.5"/>
-          <circle cx="31" cy="16" r="7"/>
-          <rect x="5" y="13" width="27" height="13" rx="6.5"/>
-        </g>
-        <ellipse class="sheep-ear" cx="33.2" cy="15.2" rx="3" ry="1.8" transform="rotate(-42 33.2 15.2)"/>
-        <ellipse class="sheep-face" cx="36.6" cy="19.4" rx="5.4" ry="4.6"/>
-        <circle class="sheep-eye" cx="38.2" cy="18" r="1.2"/>
+        ${sheepBody(asleep ? 5 : 0, !asleep)}
+        ${HEADS[pose]}
       </svg>`;
   }
 
@@ -613,7 +652,7 @@
           <div class="agent-row-wrap">
             <button class="agent-row-delete" data-workspace-id="${agent.workspace_id}">Close</button>
             <button class="agent-row ${isActive ? "active" : ""}" data-pane-id="${agent.pane_id}">
-              <span class="sheep-wrap ${status}">${sheepSvg()}</span>
+              <span class="sheep-wrap ${status}">${sheepSvg(status)}</span>
               <span class="agent-row-text">
                 <span class="agent-row-name">${escapeHtml(agent.name || agent.pane_id)}</span>
                 <span class="agent-row-title">${escapeHtml(subtitle)}</span>
