@@ -135,6 +135,20 @@ def complete_path(base: str, query: str, limit: int = 20) -> list:
     return out
 
 
+def agent_rows() -> list:
+    """Every row the phone shows, in one call. Driven from workspaces, not
+    agents: a freshly created workspace has no agent yet and would otherwise be
+    invisible. Workspace labels are also what the desktop UI shows ("sheepit",
+    "ib-orbit") - agent.list only carries ids."""
+    res = call_herdr_rpc("agent.list")
+    if "error" in res:
+        raise RuntimeError(res["error"])
+    agents_raw = res.get("result", {}).get("agents", [])
+    ws_list = call_herdr_rpc("workspace.list").get("result", {}).get("workspaces", [])
+    panes = call_herdr_rpc("pane.list").get("result", {}).get("panes", [])
+    return build_agent_rows(ws_list, panes, agents_raw)
+
+
 def build_agent_rows(ws_list: list, panes: list, agents_raw: list) -> list:
     """One row per pane running an agent, grouped under its workspace.
 
@@ -186,6 +200,30 @@ def build_agent_rows(ws_list: list, panes: list, agents_raw: list) -> list:
     return rows
 
 
+# The watcher sees the working -> stopped transition; the push that follows
+# carries no payload, so what it saw is parked here for the service worker to
+# come and read.
+_LAST_FINISHED = {"at": 0.0, "agents": []}
+_LAST_FINISHED_LOCK = threading.Lock()
+
+
+def record_finished(rows: list) -> None:
+    with _LAST_FINISHED_LOCK:
+        _LAST_FINISHED["at"] = time.time()
+        _LAST_FINISHED["agents"] = [
+            {"pane_id": r.get("pane_id"), "name": r.get("name"),
+             "title": r.get("title", ""), "status": r.get("status")}
+            for r in rows
+        ]
+
+
+def last_finished() -> dict:
+    with _LAST_FINISHED_LOCK:
+        return {"at": _LAST_FINISHED["at"],
+                "age": round(time.time() - _LAST_FINISHED["at"], 1) if _LAST_FINISHED["at"] else None,
+                "agents": list(_LAST_FINISHED["agents"])}
+
+
 class HerdrHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -226,22 +264,18 @@ class HerdrHandler(BaseHTTPRequestHandler):
 
         # API: List all active agents
         if path == "/api/agents":
-            res = call_herdr_rpc("agent.list")
-            if "error" in res:
-                self.send_json(res, 500)
+            try:
+                agents = agent_rows()
+            except RuntimeError as e:
+                self.send_json({"error": e.args[0]}, 500)
                 return
-
-            agents_raw = res.get("result", {}).get("agents", [])
-
-            # Drive the list from workspaces, not agents: a freshly created
-            # workspace has no agent yet and would otherwise be invisible.
-            # Workspace labels are also what the desktop UI shows
-            # ("sheepit", "ib-orbit") - agent.list only carries ids.
-            ws_list = call_herdr_rpc("workspace.list").get("result", {}).get("workspaces", [])
-            panes = call_herdr_rpc("pane.list").get("result", {}).get("panes", [])
-
-            agents = build_agent_rows(ws_list, panes, agents_raw)
             self.send_json({"ok": True, "agents": agents})
+            return
+
+        # API: Who stopped working most recently. A push carries no payload, so
+        # the service worker asks this to name the agent in the notification.
+        if path == "/api/push/last":
+            self.send_json({"ok": True, **last_finished()})
             return
 
         # API: VAPID public key + whether this device is already subscribed
@@ -526,16 +560,24 @@ class StatusWatcher(threading.Thread):
                 current = self.snapshot()
             except Exception:
                 continue
-            if any(
-                pane in self.previous
-                and self.previous[pane] in self.BUSY
-                and status not in self.BUSY
+            stopped = [
+                pane
                 for pane, status in current.items()
-            ) and push.load_subs():
+                if self.previous.get(pane) in self.BUSY and status not in self.BUSY
+            ]
+            if stopped:
+                # Name them before pushing: the notification wants to say which
+                # agent finished, and only this side of the wire knows.
                 try:
-                    push.broadcast()
+                    rows = {r.get("pane_id"): r for r in agent_rows()}
+                    record_finished([rows[p] for p in stopped if p in rows])
                 except Exception as e:
-                    print(f"push failed: {e}", file=sys.stderr)
+                    print(f"naming finished agents failed: {e}", file=sys.stderr)
+                if push.load_subs():
+                    try:
+                        push.broadcast()
+                    except Exception as e:
+                        print(f"push failed: {e}", file=sys.stderr)
             self.previous = current
 
     @staticmethod

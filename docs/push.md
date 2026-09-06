@@ -33,9 +33,25 @@ RFC 8292 contact sent to the push service.
 
 Encrypting a push payload needs ECDH plus AES-GCM, which the standard library
 cannot do. Rather than take a dependency, SheepIt sends an empty push and lets
-the service worker do the work: on wake, `sw.js` fetches `/api/agents` and
-names whichever agent stopped, so the notification still shows the real project
-name — it just fetches it rather than being told.
+the service worker fetch what it needs on wake.
+
+That costs something the payload would have carried for free: *which* agent
+just finished. The list alone cannot say — it only shows who is waiting now, so
+a notification built from it can describe the herd but never the event. So the
+gateway remembers. The watcher that spots the working → stopped transition
+records the panes it saw in `/api/push/last`, and `sw.js` reads that alongside
+`/api/agents`:
+
+```text
+title:  muskelmuskel finished          ← from /api/push/last
+body:   3 agents waiting for you       ← from /api/agents
+```
+
+Two agents stopping in the same sweep become *"muskelmuskel and ib-orbit
+finished"*; more than two, *"muskelmuskel and 3 others finished"*. A record
+older than two minutes is ignored as stale — a push arriving long after the
+event falls back to describing the list, as does a gateway that cannot be
+reached at all.
 
 The same handler sets the badge count, and collapses repeats into one
 notification so a burst of finishing agents does not become a burst of alerts.

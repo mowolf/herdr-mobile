@@ -99,8 +99,10 @@ The one that needs setting up, because iOS insists.
    Screen*, then open it from there rather than from Safari.
 2. **gear → Notify when an agent finishes**, and accept the iOS prompt.
 
-That is it. Alerts now arrive through Apple's push service rather than your
-tailnet, so they reach you on cellular with the phone locked. The gateway has
+That is it. Alerts name the agent that just finished and count how many are
+now waiting — *"muskelmuskel finished / 3 agents waiting for you"* — and arrive
+through Apple's push service rather than your tailnet, so they reach you on
+cellular with the phone locked. The gateway has
 to be awake to send them: on a laptop that sleeps, use the
 [menu bar app](menubar/README.md) or run `caffeinate -s`.
 
