@@ -291,14 +291,90 @@
 
 #pragma mark - Menu
 
+/* The same sheep the phone draws, as a menu bar template image: one flat
+   silhouette that AppKit tints for the light or dark bar, so it cannot carry
+   colour and says "running" with a slash instead. Drawn rather than shipped as
+   an asset - the whole app is one .m file, and a bundled image would need a
+   resource to keep in step with static/icon.svg. */
+- (NSImage *)sheepImageRunning:(BOOL)running {
+    const CGFloat height = 16.0;          // the usual size of menu bar artwork
+    const CGFloat scale = height / 34.0;  // the sheep is drawn in a 44x34 box
+    NSSize size = NSMakeSize(ceil(44.0 * scale), height);
+
+    NSImage *image = [NSImage imageWithSize:size flipped:NO drawingHandler:^BOOL(NSRect rect) {
+        NSAffineTransform *flip = [NSAffineTransform transform];
+        [flip translateXBy:0 yBy:size.height];   // SVG's y grows downward,
+        [flip scaleXBy:scale yBy:-scale];        // AppKit's grows up
+        [flip concat];
+
+        NSBezierPath *(^oval)(CGFloat, CGFloat, CGFloat, CGFloat) =
+            ^NSBezierPath *(CGFloat cx, CGFloat cy, CGFloat rx, CGFloat ry) {
+                return [NSBezierPath bezierPathWithOvalInRect:
+                            NSMakeRect(cx - rx, cy - ry, rx * 2, ry * 2)];
+            };
+
+        // Head up: at this size the raised head is what makes it a sheep and
+        // not a cloud.
+        NSBezierPath *face = oval(36.4, 12.6, 5.4, 4.6);
+        NSBezierPath *ear = oval(0, 0, 3, 1.8);
+        NSAffineTransform *place = [NSAffineTransform transform];
+        [place translateXBy:32.4 yBy:9];
+        [place rotateByDegrees:-38];
+        [ear transformUsingAffineTransform:place];
+
+        NSBezierPath *sheep = [NSBezierPath bezierPath];
+        sheep.windingRule = NSWindingRuleNonZero;   // lobes union, not cancel
+        [sheep appendBezierPathWithRoundedRect:NSMakeRect(11, 21, 5, 12) xRadius:2.5 yRadius:2.5];
+        [sheep appendBezierPathWithRoundedRect:NSMakeRect(23, 21, 5, 12) xRadius:2.5 yRadius:2.5];
+        [sheep appendBezierPath:oval(11.5, 16, 7.5, 7.5)];
+        [sheep appendBezierPath:oval(18, 11, 8, 8)];
+        [sheep appendBezierPath:oval(25.5, 11.5, 7.5, 7.5)];
+        [sheep appendBezierPath:oval(31, 16, 7, 7)];
+        [sheep appendBezierPathWithRoundedRect:NSMakeRect(5, 13, 27, 13) xRadius:6.5 yRadius:6.5];
+        [sheep appendBezierPath:ear];
+        [sheep appendBezierPath:face];
+
+        [NSColor.blackColor set];
+        [sheep fill];
+
+        /* A template image is a single alpha channel, so the head can only be
+           told from the fleece by cutting the gap out of it. */
+        NSGraphicsContext.currentContext.compositingOperation = NSCompositingOperationDestinationOut;
+        face.lineWidth = 1.3;
+        [face stroke];
+        ear.lineWidth = 1.0;
+        [ear stroke];
+        [oval(38.2, 11.4, 1.2, 1.2) fill];
+
+        if (!running) {
+            // Stopped: a slash, carved with a clear margin so it stays legible
+            // against the body underneath it.
+            NSBezierPath *slash = [NSBezierPath bezierPath];
+            [slash moveToPoint:NSMakePoint(6, 31)];
+            [slash lineToPoint:NSMakePoint(38, 3)];
+            slash.lineCapStyle = NSLineCapStyleRound;
+            slash.lineWidth = 7.0;
+            [slash stroke];                              // still erasing
+
+            NSGraphicsContext.currentContext.compositingOperation = NSCompositingOperationSourceOver;
+            slash.lineWidth = 3.0;
+            [NSColor.blackColor set];
+            [slash stroke];
+        }
+        return YES;
+    }];
+
+    image.template = YES;
+    image.accessibilityDescription = running ? @"Sheep It gateway running"
+                                             : @"Sheep It gateway stopped";
+    return image;
+}
+
 - (void)render {
     BOOL on = self.isRunning;
 
-    NSString *symbol = on ? @"antenna.radiowaves.left.and.right"
-                          : @"antenna.radiowaves.left.and.right.slash";
-    NSImage *image = [NSImage imageWithSystemSymbolName:symbol accessibilityDescription:@"herdr-mobile"];
+    NSImage *image = [self sheepImageRunning:on];
     if (image) {
-        image.template = YES;
         self.statusItem.button.image = image;
     } else {
         self.statusItem.button.title = on ? @"H" : @"h";

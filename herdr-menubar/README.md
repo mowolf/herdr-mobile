@@ -12,8 +12,10 @@ started by hand and drift out of step:
 | **Tailscale** | brought up if it is stopped — the phone reaches the gateway over the tailnet |
 | **`caffeinate -s`** | an asleep Mac cannot send a push notification, so alerts silently never arrive |
 
-The bar icon shows the state: a filled antenna when running, slashed and dimmed
-when off.
+The bar icon is the Sheep It sheep, drawn in code rather than bundled as an
+asset: solid when the gateway is running, slashed and dimmed when it is off. It
+is a template image, so the menu bar tints it for light and dark - which is why
+the head is told from the fleece by a cut-out gap rather than by colour.
 
 ## Build
 
