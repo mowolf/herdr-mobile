@@ -1,4 +1,4 @@
-// Herdr Mobile Client Application
+// Sheep It - client application for the herdr-mobile gateway
 
 (function () {
   let state = {
@@ -8,6 +8,11 @@
     linesCount: 100,
     showStatusBar: false,
     numberKeys: 3,
+    badgeCount: -1,
+    activity: {},
+    order: [],
+    bleat: true,
+    statuses: null,
     showKeys: true,
     mode: "",
     isUserScrolledUp: false,
@@ -54,7 +59,64 @@
   const elSheetBackdrop = document.getElementById("sheet-backdrop");
   const elToggleStatusBar = document.getElementById("toggle-statusbar");
   const elTogglePush = document.getElementById("toggle-push");
+  const elToggleBleat = document.getElementById("toggle-bleat");
   const elPushHint = document.getElementById("push-hint");
+
+  /* The bleat an agent gets when it stops working, while you are looking at
+     the app. iOS will not let a page make noise until it has been touched
+     once, so the context is created and the file decoded on the first
+     interaction and kept for the rest of the session. */
+  const BLEAT_URL = "/bleat.wav";
+  let audioCtx = null;
+  let bleatBuffer = null;
+
+  async function unlockAudio() {
+    if (audioCtx) {
+      if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => {});
+      return;
+    }
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    try {
+      audioCtx = new Ctx();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+      const res = await fetch(BLEAT_URL);
+      bleatBuffer = await audioCtx.decodeAudioData(await res.arrayBuffer());
+    } catch (err) {
+      audioCtx = null; // no audio this session; everything else still works
+    }
+  }
+
+  function playBleat() {
+    if (!state.bleat || !audioCtx || !bleatBuffer) return;
+    if (document.hidden) return; // never bleat from a backgrounded tab
+    try {
+      const src = audioCtx.createBufferSource();
+      src.buffer = bleatBuffer;
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.55;
+      src.connect(gain).connect(audioCtx.destination);
+      src.start();
+    } catch (err) {
+      /* context died with the page going to sleep; nothing to do */
+    }
+  }
+
+  /* One bleat per batch, however many agents landed at once - eight sheep at
+     the same instant is a farmyard, not a notification. */
+  function bleatForFinished(agents) {
+    const now = {};
+    for (const a of agents) {
+      if (a.pane_id) now[a.pane_id] = a.has_agent ? a.status : null;
+    }
+    const before = state.statuses;
+    state.statuses = now;
+    if (!before) return; // first sweep: everything looks new, nothing finished
+    const finished = Object.keys(now).some(
+      (id) => before[id] === "working" && now[id] && now[id] !== "working"
+    );
+    if (finished) playBleat();
+  }
 
   // Haptic feedback helper
   function triggerHaptic(type = "light") {
@@ -455,7 +517,10 @@
       setConnected(true);
 
       state.agents = data.agents || [];
+      bleatForFinished(state.agents);
+      sortAgentsByRecency();
       renderAgentBar();
+      updateBadge();
 
       // If no agent selected or active agent no longer exists, select first available
       if (
@@ -478,6 +543,26 @@
     }
   }
 
+  /* iOS freezes the home screen icon at install time, so the badge on it is
+     the only thing that can still change - it counts the agents waiting on
+     you, and clears itself as you answer them. Needs an installed web app and
+     granted notification permission; anywhere else the call is simply absent
+     or a no-op. */
+  const WAITING = ["idle", "done", "blocked"];
+
+  function updateBadge() {
+    if (!("setAppBadge" in navigator)) return;
+    const waiting = state.agents.filter(
+      (a) => a.has_agent && WAITING.includes(a.status)
+    ).length;
+    if (waiting === state.badgeCount) return;
+    state.badgeCount = waiting;
+    const done = waiting > 0 ? navigator.setAppBadge(waiting) : navigator.clearAppBadge();
+    Promise.resolve(done).catch(() => {
+      // Permission not granted: badges stay hidden, nothing else breaks.
+    });
+  }
+
   // Header button showing the current project
   function renderAgentBar() {
     const agent = state.agents.find((a) => a.pane_id === state.activePaneId);
@@ -489,6 +574,27 @@
     elAgentSelectDot.className = `agent-dot ${agent ? agent.status || "unknown" : "unknown"}`;
 
     if (!elAgentPicker.classList.contains("hidden")) renderAgentList();
+  }
+
+  /* One sheep per project, fleece coloured by what the agent is doing - the
+     same flock the home screen icon shows one of. Drawn inline so the fleece
+     can inherit the row's colour instead of shipping five copies of the file. */
+  function sheepSvg() {
+    return `
+      <svg class="sheep" viewBox="0 0 44 34" aria-hidden="true">
+        <g fill="currentColor">
+          <rect x="11" y="21" width="5" height="12" rx="2.5"/>
+          <rect x="23" y="21" width="5" height="12" rx="2.5"/>
+          <circle cx="11.5" cy="16" r="7.5"/>
+          <circle cx="18" cy="11" r="8"/>
+          <circle cx="25.5" cy="11.5" r="7.5"/>
+          <circle cx="31" cy="16" r="7"/>
+          <rect x="5" y="13" width="27" height="13" rx="6.5"/>
+        </g>
+        <ellipse class="sheep-ear" cx="33.2" cy="15.2" rx="3" ry="1.8" transform="rotate(-42 33.2 15.2)"/>
+        <ellipse class="sheep-face" cx="36.6" cy="19.4" rx="5.4" ry="4.6"/>
+        <circle class="sheep-eye" cx="38.2" cy="18" r="1.2"/>
+      </svg>`;
   }
 
   // Full-screen project list
@@ -507,12 +613,15 @@
           <div class="agent-row-wrap">
             <button class="agent-row-delete" data-workspace-id="${agent.workspace_id}">Close</button>
             <button class="agent-row ${isActive ? "active" : ""}" data-pane-id="${agent.pane_id}">
-              <span class="agent-dot ${status}"></span>
+              <span class="sheep-wrap ${status}">${sheepSvg()}</span>
               <span class="agent-row-text">
                 <span class="agent-row-name">${escapeHtml(agent.name || agent.pane_id)}</span>
                 <span class="agent-row-title">${escapeHtml(subtitle)}</span>
               </span>
-              <span class="status-badge status-${status}">${escapeHtml(status)}</span>
+              <span class="agent-row-side">
+                <span class="status-badge status-${status}">${escapeHtml(status)}</span>
+                <span class="agent-row-ago">${escapeHtml(agoLabel(agent.pane_id))}</span>
+              </span>
             </button>
           </div>
         `;
@@ -580,6 +689,7 @@
       return;
     }
     closePicker();
+    touchAgent(paneId);
     state.activePaneId = paneId;
     state.historyText = "";
     elHistoryContent.innerHTML = '<div class="history-empty">Loading…</div>';
@@ -885,9 +995,100 @@
       state.showStatusBar = localStorage.getItem("herdr.statusbar") === "1";
       elToggleStatusBar.checked = state.showStatusBar;
       setKeysBar(localStorage.getItem("herdr.keys") !== "0");
+      state.activity = loadActivity();
+      state.bleat = localStorage.getItem("herdr.bleat") !== "0";
+      elToggleBleat.checked = state.bleat;
     } catch (err) {
       /* localStorage unavailable in private mode; defaults are fine */
     }
+  }
+
+  /* Recency ordering. Herdr has no timestamps, but every pane carries a
+     state_change_seq that only ever grows, so watching it across polls tells us
+     when a project last did something - and opening one here counts too. Both
+     land as wall-clock stamps in localStorage, which is why the order survives
+     a reload and follows this phone rather than the server's workspace
+     numbering. */
+  const ACTIVITY_KEY = "herdr.activity";
+
+  function loadActivity() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(ACTIVITY_KEY) || "{}");
+      return raw && typeof raw === "object" ? raw : {};
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function saveActivity() {
+    savePref(ACTIVITY_KEY, JSON.stringify(state.activity));
+  }
+
+  /* Stamp anything whose sequence moved, forget panes that are gone, and sort
+     newest first. On a first run nothing is known and every pane stamps the
+     same instant, so the sequence itself breaks the tie - the order is right
+     immediately instead of after a day of watching. */
+  function sortAgentsByRecency() {
+    const now = Date.now();
+    const next = {};
+    let changed = Object.keys(state.activity).length !== state.agents.length;
+
+    for (const a of state.agents) {
+      const id = a.pane_id;
+      if (!id) continue;
+      const seq = Number(a.state_change_seq) || 0;
+      const prev = state.activity[id];
+      if (prev && prev.seq === seq) {
+        next[id] = prev;
+      } else {
+        // A first sighting is not a change: we have no idea when it happened,
+        // so the stamp orders the list but carries no time to show.
+        next[id] = { seq, ts: now, seeded: !prev };
+        changed = true;
+      }
+    }
+
+    state.activity = next;
+    if (changed) saveActivity();
+
+    /* Never reshuffle a list somebody is looking at: an agent changing state
+       would slide a row out from under the thumb about to tap it. Hold the
+       last order until the picker closes. */
+    if (!elAgentPicker.classList.contains("hidden") && state.order.length) {
+      const rank = new Map(state.order.map((id, i) => [id, i]));
+      const at = (id) => (rank.has(id) ? rank.get(id) : Number.MAX_SAFE_INTEGER);
+      state.agents.sort((a, b) => at(a.pane_id) - at(b.pane_id));
+      return;
+    }
+
+    state.agents.sort((a, b) => {
+      const x = state.activity[a.pane_id] || { ts: 0, seq: 0 };
+      const y = state.activity[b.pane_id] || { ts: 0, seq: 0 };
+      return y.ts - x.ts || y.seq - x.seq;
+    });
+    state.order = state.agents.map((a) => a.pane_id);
+  }
+
+  // Opening a project is activity too, even when its agent sat still.
+  function touchAgent(paneId) {
+    const rec = state.activity[paneId];
+    state.activity[paneId] = { seq: rec ? rec.seq : 0, ts: Date.now() };
+    saveActivity();
+  }
+
+  /* "3m" - the age of the last change we actually watched happen. Deliberately
+     blank for a project we have only ever seen sitting still, rather than
+     claiming it changed the moment this phone first looked. */
+  function agoLabel(paneId) {
+    const rec = state.activity[paneId];
+    if (!rec || rec.seeded) return "";
+    const secs = Math.max(0, Math.round((Date.now() - rec.ts) / 1000));
+    if (secs < 45) return "now";
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    return `${Math.round(hours / 24)}d`;
   }
 
   function savePref(key, value) {
@@ -1062,6 +1263,12 @@
     setTimeout(() => fetchHistory(true), 400);
   });
 
+  elToggleBleat.addEventListener("change", (e) => {
+    state.bleat = e.target.checked;
+    savePref("herdr.bleat", state.bleat ? "1" : "0");
+    if (state.bleat) unlockAudio().then(playBleat); // so you hear what you enabled
+  });
+
   elToggleStatusBar.addEventListener("change", (e) => {
     state.showStatusBar = e.target.checked;
     savePref("herdr.statusbar", state.showStatusBar ? "1" : "0");
@@ -1198,6 +1405,9 @@
 
   // Init
   loadPrefs();
+  // The first touch anywhere is what buys the page the right to make noise.
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("touchstart", unlockAudio, { once: true });
   autoResizeTextarea();
   loop();
   startPolling();

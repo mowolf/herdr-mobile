@@ -287,6 +287,71 @@ html, body {
   text-overflow: ellipsis;
 }
 
+/* The flock: one sheep per project, tinted by what its agent is doing. The
+   fleece is currentColor, so a single colour on the wrapper drives the whole
+   animal and the eye stays readable against it. */
+.sheep-wrap {
+  flex-shrink: 0;
+  width: 34px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  color: var(--status-unknown);
+}
+
+.sheep {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Face and ear are pale, not dark: a dark muzzle disappears into the card and
+   leaves a headless blob. The card-coloured outline keeps them off the fleece. */
+.sheep-face,
+.sheep-ear {
+  fill: #dfe5f0;
+  stroke: var(--bg-card);
+  stroke-width: 1.1;
+}
+
+.sheep-ear { stroke-width: 1; }
+.sheep-eye { fill: var(--bg-card); }
+
+.agent-row.active .sheep-face,
+.agent-row.active .sheep-ear { stroke: var(--bg-hover); }
+
+.agent-row.active .sheep-eye { fill: var(--bg-hover); }
+
+.sheep-wrap.idle { color: var(--status-idle); }
+.sheep-wrap.done { color: var(--status-done); }
+.sheep-wrap.unknown { color: var(--status-unknown); }
+
+/* Working sheep graze; a blocked one looks up and waits to be answered. */
+.sheep-wrap.working {
+  color: var(--status-working);
+  animation: sheep-graze 2.4s ease-in-out infinite;
+}
+
+.sheep-wrap.blocked {
+  color: var(--status-blocked);
+  animation: sheep-alert 1.2s ease-in-out infinite;
+}
+
+@keyframes sheep-graze {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(1.5px) rotate(-4deg); }
+}
+
+@keyframes sheep-alert {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheep-wrap.working,
+  .sheep-wrap.blocked { animation: none; }
+}
+
 .agent-dot {
   width: 7px;
   height: 7px;
@@ -308,6 +373,23 @@ html, body {
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+/* Badge over the age of the last change, right-aligned against the row. */
+.agent-row-side {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.agent-row-ago {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  min-height: 10px;
 }
 
 .status-badge {

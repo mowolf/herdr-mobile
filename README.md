@@ -1,17 +1,24 @@
-# herdr-mobile 📱
+# Sheep It 🐑
 
-A minimal, distraction-free mobile web interface for [Herdr](https://herdr.dev) running on your server, designed specifically for iPhone and Tailscale.
+A minimal, distraction-free mobile web interface for [Herdr](https://herdr.dev)
+running on your server, designed specifically for iPhone and Tailscale. Herd
+your agents from the couch and, when one asks, sheep it.
+
+The app is **Sheep It**; the repository, the gateway process and the service
+files keep the `herdr-mobile` name.
 
 ## Features
 
 - **PWA for iOS**: Add to Home Screen for a native, full-screen iOS app feel without browser chrome.
 - **Native iOS Dictation**: Use native iOS voice-to-text directly from the virtual keyboard microphone into prompts.
 - **Readable Transcript**: The pane's output is parsed into blocks and coloured by speaker, mirroring the terminal's own ANSI colours. Full-width rules collapse to hairlines and tables keep their alignment, so nothing wraps into a wall of dashes.
-- **Project Picker**: A dropdown naming the current project, with a full-screen list of every workspace and live status (🟢 Idle, 🟡 Working, 🔴 Blocked). Create a workspace with **New**; swipe a row left to close one.
+- **Project Picker**: A dropdown naming the current project, with a full-screen list of every workspace, each shown as a sheep whose fleece carries its status (🟢 Idle, 🟡 Working, 🔴 Blocked). Most recent first: the phone remembers which projects last changed and which you last opened, shows the age of that change against each row, and holds the order steady while the list is on screen. Create a workspace with **New**; swipe a row left to close one.
 - **Key Palette**: `y`, `n`, number keys, arrows, tab and enter for the confirmation prompts agents stop on, plus `Esc` and `Ctrl+C`. The number keys follow the prompt on screen, so a question with five options gets five keys.
 - **Selection Prompts**: The question an agent is waiting on renders as its own card instead of being mistaken for the desktop's input box, so choices never go missing on the phone.
 - **Desktop Input Mirror**: Shows what is typed into the pane on the laptop, with one tap to pull it into the phone's composer.
 - **Push Notifications**: Get told when an agent finishes, even off the tailnet with the phone locked. See [Push Notifications](#push-notifications-ios).
+- **Bleat**: A sheep answers when an agent stops working while you have the app open. Toggle it in settings; see [The Bleat](#the-bleat).
+- **Home Screen Badge**: The icon carries the number of agents waiting on you, and clears itself as you answer them. See [The Home Screen Icon](#the-home-screen-icon-ios).
 - **Agent Mode**: Cycle auto / manual / plan from settings without reaching for the laptop.
 - **Zero-Dependency Gateway**: Single lightweight Python backend connecting directly to Herdr's UNIX domain socket (`herdr.sock`). Standard library only; `openssl` is used for push signing.
 - **Secure by Default**: Served over your private Tailscale Tailnet with automated HTTPS.
@@ -65,9 +72,13 @@ sudo systemctl enable --now herdr-mobile.service
 ### 3b. Menu bar app (macOS, recommended)
 
 [`herdr-menubar/`](herdr-menubar) is a small Apple Silicon menu bar app that
-runs the gateway, brings Tailscale up, and holds `caffeinate -s` so the Mac
-stays awake — an asleep Mac cannot send push notifications, so alerts would
-silently never arrive. One toggle drives all three.
+runs the gateway, starts `herdr server` if no Herdr is listening, brings
+Tailscale up, and holds `caffeinate -s` so the Mac stays awake — an asleep Mac
+cannot send push notifications, so alerts would silently never arrive. One
+toggle drives all four.
+
+Turning it off leaves Herdr running: the headless server holds every open pane
+and agent, so stopping it is `herdr server stop`.
 
 ```bash
 make -C herdr-menubar install   # then add it to Login Items
@@ -91,6 +102,77 @@ The plist runs `/usr/bin/python3` (system Python) rather than a Homebrew Python
 deliberately: the macOS application firewall ships with `/usr/bin/python3`
 allowed for incoming connections, while a Homebrew interpreter is not — so a
 Homebrew-launched server can be silently unreachable from other devices.
+
+---
+
+## The Home Screen Icon (iOS)
+
+A blue sheep on a moonlit pasture, in `static/icon.svg` - the same animal the
+project list draws, blown up to 512 and given a landscape. The PNGs beside it
+are rasterised from that one file, so edit the SVG and regenerate:
+
+```bash
+for s in 180 192 512; do
+  qlmanage -t -s $s -o /tmp/icons static/icon.svg
+  mv /tmp/icons/icon.svg.png static/icon-$s.png
+done
+```
+
+Three things about iOS are worth knowing before trying to make the icon say
+anything:
+
+* **iOS ignores both the manifest icons and an SVG `apple-touch-icon`.** The
+  home screen icon comes from the PNG in `<link rel="apple-touch-icon">`; point
+  it at an SVG and iOS falls back to a screenshot of the page.
+* **The icon is snapshotted when the app is added to the home screen** and is
+  never fetched again. Changing the PNG, the `<link>`, or the manifest does
+  nothing to an install that already exists - the only way to pick up a new
+  icon is **long-press -> Remove App**, then add it again from Safari. There is
+  no API to change an installed icon, so it cannot reflect live state: no sheep
+  per agent, no colour per status.
+* **The badge is the exception.** `navigator.setAppBadge()` works on an
+  installed home screen web app (iOS 16.4+) and is the one part of the icon
+  that updates, so it carries the count of agents waiting on you - set while
+  the app is open and again from the push handler while it is closed. It needs
+  granted notification permission, the same one push uses; without it the badge
+  silently never appears.
+
+The icon is drawn full bleed, with no rounded corners of its own, because iOS
+applies its own mask on top.
+
+The home screen *name* is snapshotted the same way, from
+`apple-mobile-web-app-title`. An install made before the app was called **Sheep
+It** still reads "Herdr" underneath its icon until it is removed and added
+again.
+
+---
+
+## The Bleat
+
+`static/bleat.wav` is a synthesised "määäh", played once whenever an agent goes
+from working to stopped while the app is open. Several agents finishing in the
+same sweep still get one bleat; eight sheep at once is a farmyard, not a
+notification. **gear → Bleat when an agent finishes** turns it off, and
+toggling it back on plays it so you hear what you enabled.
+
+There is no sample to license or lose: the sound is generated, and the
+generator is committed next to it.
+
+```bash
+python3 make_bleat.py   # rewrites static/bleat.wav
+```
+
+It is a buzzy glottal source under three formant resonators tuned to an open
+`ä`, with the first swept up from a closed nasal onset so it opens like
+"m-ää", a falling pitch and the 26 Hz tremolo that makes a bleat sound like a
+sheep instead of a synth tone.
+
+**Push notifications cannot carry it.** The Notification API's `sound` property
+was dropped from the standard in 2018 for want of implementations, and iOS
+plays its own system sound for web push regardless. Nothing in the service
+worker can change that, so the bleat is a foreground sound only - which is also
+why iOS demands one touch on the page before it will let the app make any noise
+at all.
 
 ---
 
@@ -132,12 +214,12 @@ dead and it is dropped automatically.
 
 ## Exposing Multiple Apps & Dev Servers via Tailscale
 
-When coding agents start local development servers (e.g., Nuxt, Next.js, Vite), they often bind to common ports like `3000` or `5173`. Here is how they coexist cleanly with Herdr Mobile on your Tailnet:
+When coding agents start local development servers (e.g., Nuxt, Next.js, Vite), they often bind to common ports like `3000` or `5173`. Here is how they coexist cleanly with Sheep It on your Tailnet:
 
 ### 1. Internal Port Isolation
-Herdr Mobile defaults to internal port **`3009`** (instead of standard `3000`). This ensures agents starting frameworks that default to `3000` never collide with Herdr Mobile.
+Sheep It defaults to internal port **`3009`** (instead of standard `3000`). This ensures agents starting frameworks that default to `3000` never collide with it.
 
-### 2. Dedicated HTTPS Port for Herdr Mobile (`:8443`)
+### 2. Dedicated HTTPS Port for Sheep It (`:8443`)
 Tailscale Serve supports multiple HTTPS ports with valid automated certificates:
 ```bash
 tailscale serve --bg --https=8443 http://127.0.0.1:3009
@@ -165,7 +247,7 @@ Tailscale operates as a secure mesh VPN. The firewall on `tailscale0` allows all
 ### 4. Path-Based Routing on Port 443 (Optional)
 Tailscale Serve can also route different URL paths on port 443 to different local services:
 ```bash
-# Herdr Mobile on /herdr
+# Sheep It on /herdr
 tailscale serve --bg --set-path /herdr http://127.0.0.1:3009
 
 # Agent dev server on root / or /preview

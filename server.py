@@ -178,6 +178,9 @@ def build_agent_rows(ws_list: list, panes: list, agents_raw: list) -> list:
                 "tab_id": chosen.get("tab_id"),
                 "focused": ws.get("focused", False),
                 "has_agent": pane_id in by_pane,
+                # Monotonic; the client watches it to order projects by
+                # whichever one last did something.
+                "state_change_seq": a.get("state_change_seq", 0),
             })
     return rows
 
