@@ -41,6 +41,10 @@ project telling you at a glance who is working and who is waiting.
   locked, plus a count on the home screen icon.
 - **A bleat.** A sheep answers when an agent stops, if the app is open.
 - **Native dictation.** Talk to your agent using the iOS keyboard's mic.
+- **A key palette** for the keys agents stop on — `y`, `n`, numbers, arrows,
+  tab, enter, `Esc` and `Ctrl+C`.
+- **Workspace control.** Start a project with **New**, swipe a row left to
+  close one, cycle auto / plan / manual mode without touching the laptop.
 - **A menu bar switch on the Mac** that starts everything the phone needs and
   keeps the machine awake so notifications can actually arrive.
 
@@ -80,6 +84,74 @@ of that with one switch in the menu bar.
 
 Full instructions, autostart units and Tailscale routing live in
 **[docs/gateway.md](docs/gateway.md)**.
+
+## Turning the features on
+
+Everything below lives behind the **gear** in the top right, once the app is
+open on your phone.
+
+### Notifications
+
+The one that needs setting up, because iOS insists.
+
+1. **Add the app to your home screen first.** Web Push does not work in a
+   Safari tab — only in an installed web app (iOS 16.4+). Share → *Add to Home
+   Screen*, then open it from there rather than from Safari.
+2. **gear → Notify when an agent finishes**, and accept the iOS prompt.
+
+That is it. Alerts now arrive through Apple's push service rather than your
+tailnet, so they reach you on cellular with the phone locked. The gateway has
+to be awake to send them: on a laptop that sleeps, use the
+[menu bar app](menubar/README.md) or run `caffeinate -s`.
+
+The same permission drives the **badge** on the home screen icon — the number
+of agents waiting on you, clearing itself as you answer them. There is nothing
+separate to enable.
+
+If the toggle refuses to stay on, the hint beside it says why: *blocked in iOS
+Settings* means the prompt was denied once and iOS will not ask again — clear
+it under **Settings → Notifications**, or remove and re-add the app.
+[More detail, and how to test it](docs/push.md).
+
+### The bleat
+
+**gear → Bleat when an agent finishes.** On by default; toggling it back on
+plays it so you hear what you enabled.
+
+It only sounds while the app is open and in front of you — a notification
+cannot carry a custom sound on iOS, so this is not a replacement for the one
+above. iOS also refuses to let a page make any noise until it has been touched
+once, so the first tap anywhere in the app is what unlocks it.
+
+### Dictation
+
+No setting. Tap the microphone on the iOS keyboard and talk into the composer.
+
+### The key palette
+
+The **keyboard icon** in the header shows and hides it: `y`, `n`, the numbers,
+arrows, tab, enter, `Esc` and `Ctrl+C`. The number keys follow whatever the
+prompt on screen actually offers, so a five-option question gets five keys. The
+choice is remembered.
+
+### Agent mode
+
+**gear → Agent mode** cycles auto / plan / manual — the same `shift+tab` you
+would press on the laptop.
+
+### Projects
+
+Tap the project name at the top for the full list. **New** starts a workspace;
+swiping a row left reveals **Close**, which asks first — closing a workspace
+stops every agent in it, and a stray swipe on a phone is cheap to make and
+expensive to undo. The list is ordered by whatever changed most recently, and
+holds still while you are looking at it.
+
+### Scrollback and the status bar
+
+**gear → Scrollback** trades detail for speed: 50 to 400 lines per refresh.
+**Show agent status bar** brings back the agent's own bottom line — mode,
+context left — which is hidden by default because it is noise on a phone.
 
 ## Repository layout
 
