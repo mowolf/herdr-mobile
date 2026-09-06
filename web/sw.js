@@ -30,6 +30,20 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
    list, never the event that caused it. */
 const FRESH_SECONDS = 120;
 
+/* An older gateway has no /api/push/last, and unknown paths there fall through
+   to index.html - a 200 full of HTML. Parsing that throws, and a throw here
+   would cost the whole notification its text, so every response is checked
+   before it is believed. */
+async function readJson(res) {
+  if (!res || !res.ok) return null;
+  if (!(res.headers.get("content-type") || "").includes("application/json")) return null;
+  try {
+    return await res.json();
+  } catch (err) {
+    return null;
+  }
+}
+
 function whoFinished(last) {
   if (!last || !last.agents || !last.agents.length) return "";
   if (last.age !== null && last.age > FRESH_SECONDS) return ""; // a stale record
@@ -53,11 +67,11 @@ self.addEventListener("push", (event) => {
 
       try {
         const [agentsRes, lastRes] = await Promise.all([
-          fetch("/api/agents", { cache: "no-store" }),
+          fetch("/api/agents", { cache: "no-store" }).catch(() => null),
           fetch("/api/push/last", { cache: "no-store" }).catch(() => null),
         ]);
-        const data = await agentsRes.json();
-        const last = lastRes && lastRes.ok ? await lastRes.json() : null;
+        const data = (await readJson(agentsRes)) || {};
+        const last = await readJson(lastRes);
 
         const done = (data.agents || []).filter(
           (a) => a.has_agent && IDLE.includes(a.status)

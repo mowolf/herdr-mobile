@@ -1441,7 +1441,18 @@
   if (pushSupported()) {
     navigator.serviceWorker
       .register("/sw.js")
-      .then(refreshPushState)
+      .then((reg) => {
+        refreshPushState();
+        /* A registered worker is only re-checked on navigation, and a push
+           does not count - so a home screen app left open can go on notifying
+           you with last week's wording. Ask on every open, and again whenever
+           it comes back to the foreground. */
+        const check = () => reg.update().catch(() => {});
+        check();
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) check();
+        });
+      })
       .catch(() => setPushHint("service worker failed"));
   } else {
     refreshPushState();
