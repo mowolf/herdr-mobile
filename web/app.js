@@ -1,4 +1,4 @@
-// Sheep It - client application for the herdr-mobile gateway
+// Sheep It - the phone client for the SheepIt gateway
 
 (function () {
   let state = {
@@ -1041,16 +1041,16 @@
   // Preferences that should survive a reload
   function loadPrefs() {
     try {
-      const lines = parseInt(localStorage.getItem("herdr.lines"), 10);
+      const lines = parseInt(localStorage.getItem("sheepit.lines"), 10);
       if (lines) {
         state.linesCount = lines;
         elLinesSelect.value = String(lines);
       }
-      state.showStatusBar = localStorage.getItem("herdr.statusbar") === "1";
+      state.showStatusBar = localStorage.getItem("sheepit.statusbar") === "1";
       elToggleStatusBar.checked = state.showStatusBar;
-      setKeysBar(localStorage.getItem("herdr.keys") !== "0");
+      setKeysBar(localStorage.getItem("sheepit.keys") !== "0");
       state.activity = loadActivity();
-      state.bleat = localStorage.getItem("herdr.bleat") !== "0";
+      state.bleat = localStorage.getItem("sheepit.bleat") !== "0";
       elToggleBleat.checked = state.bleat;
     } catch (err) {
       /* localStorage unavailable in private mode; defaults are fine */
@@ -1063,7 +1063,7 @@
      land as wall-clock stamps in localStorage, which is why the order survives
      a reload and follows this phone rather than the server's workspace
      numbering. */
-  const ACTIVITY_KEY = "herdr.activity";
+  const ACTIVITY_KEY = "sheepit.activity";
 
   function loadActivity() {
     try {
@@ -1289,7 +1289,7 @@
 
   elLinesSelect.addEventListener("change", (e) => {
     state.linesCount = parseInt(e.target.value, 10) || 100;
-    savePref("herdr.lines", String(state.linesCount));
+    savePref("sheepit.lines", String(state.linesCount));
     fetchHistory(true);
   });
 
@@ -1298,7 +1298,7 @@
     state.showKeys = show;
     elKeysBar.classList.toggle("hidden", !show);
     elBtnKeys.classList.toggle("active", show);
-    savePref("herdr.keys", show ? "1" : "0");
+    savePref("sheepit.keys", show ? "1" : "0");
   }
 
   elBtnKeys.addEventListener("click", () => {
@@ -1319,13 +1319,13 @@
 
   elToggleBleat.addEventListener("change", (e) => {
     state.bleat = e.target.checked;
-    savePref("herdr.bleat", state.bleat ? "1" : "0");
+    savePref("sheepit.bleat", state.bleat ? "1" : "0");
     if (state.bleat) unlockAudio().then(playBleat); // so you hear what you enabled
   });
 
   elToggleStatusBar.addEventListener("change", (e) => {
     state.showStatusBar = e.target.checked;
-    savePref("herdr.statusbar", state.showStatusBar ? "1" : "0");
+    savePref("sheepit.statusbar", state.showStatusBar ? "1" : "0");
     renderTranscript(state.historyText);
     scrollToBottom();
   });

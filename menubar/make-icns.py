@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build SheepIt.icns from static/icon.svg.
+"""Build SheepIt.icns from web/icon.svg.
 
 macOS does not mask app icons the way iOS does: an app ships its own shape, so
 the full-bleed square that iOS rounds for us would sit in the Dock as a square
@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SRC = HERE.parent / "static" / "icon.svg"
+SRC = HERE.parent / "web" / "icon.svg"
 CANVAS = 1024
 INSET = 100          # Apple's grid: 824 of art centred in 1024
 ART = CANVAS - INSET * 2

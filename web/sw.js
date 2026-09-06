@@ -50,7 +50,7 @@ self.addEventListener("push", (event) => {
 
       await self.registration.showNotification(title, {
         body,
-        tag: "herdr-agent",       // collapse repeats into one notification
+        tag: "sheepit-agent",       // collapse repeats into one notification
         renotify: true,
         icon: "/icon.svg",
         badge: "/icon.svg",

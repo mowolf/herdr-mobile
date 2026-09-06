@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Web Push (VAPID) for herdr-mobile, using only the standard library plus the
+Web Push (VAPID) for SheepIt, using only the standard library plus the
 openssl binary.
 
 Two deliberate constraints shape this module:
@@ -25,11 +25,11 @@ import urllib.error
 from pathlib import Path
 from urllib.parse import urlparse
 
-STATE_DIR = Path(os.environ.get("HERDR_STATE_DIR", Path.home() / ".config/herdr-mobile"))
+STATE_DIR = Path(os.environ.get("SHEEPIT_STATE_DIR", Path.home() / ".config/sheepit"))
 KEY_PATH = STATE_DIR / "vapid_private.pem"
 SUBS_PATH = STATE_DIR / "subscriptions.json"
 # RFC 8292 wants a contact for the push service; a URL is as valid as a mailto.
-VAPID_SUB = os.environ.get("HERDR_PUSH_SUB", "https://github.com/mowolf/herdr-mobile")
+VAPID_SUB = os.environ.get("SHEEPIT_PUSH_SUB", "https://github.com/mowolf/herdr-mobile")
 
 # subscriptions.json is touched by request threads and the status watcher, so
 # every read-modify-write goes through this lock.

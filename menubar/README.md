@@ -1,6 +1,6 @@
 # SheepIt.app
 
-The macOS half of **Sheep It**: a menu bar switch for the herdr-mobile gateway
+The macOS half of [SheepIt](../README.md): a menu bar switch for the gateway,
 on Apple Silicon.
 
 One toggle drives the four things the phone needs, which otherwise have to be
@@ -9,7 +9,7 @@ started by hand and drift out of step:
 | | |
 |---|---|
 | **Herdr** | `herdr server` is started if no server is listening — the gateway is only a proxy onto its socket, so without it the phone shows nothing |
-| **Gateway** | runs `server.py` on `127.0.0.1:3009` |
+| **Gateway** | runs `gateway/server.py` on `127.0.0.1:3009` |
 | **Tailscale** | brought up if it is stopped — the phone reaches the gateway over the tailnet |
 | **`caffeinate -s`** | an asleep Mac cannot send a push notification, so alerts silently never arrive |
 
@@ -19,7 +19,7 @@ is a template image, so the menu bar tints it for light and dark - which is why
 the head is told from the fleece by a cut-out gap rather than by colour.
 
 The Finder icon is the phone's home screen sheep. `make-icns.py` wraps
-`static/icon.svg` in the rounded rectangle macOS expects - unlike iOS, macOS
+`web/icon.svg` in the rounded rectangle macOS expects - unlike iOS, macOS
 does not mask an icon for you - and rasterises it with `qlmanage`, so there is
 one sheep to edit rather than two.
 
@@ -58,9 +58,9 @@ install, `killall Finder`.
 
 ## Notes
 
-`server.py` is located by walking up from the bundle, so a build inside the
+`gateway/server.py` is located by walking up from the bundle, so a build inside the
 repository finds it automatically. Override with the `serverPath` user default
-or the `HERDR_SERVER` environment variable; `HERDR_PORT` changes the port.
+or the `SHEEPIT_SERVER` environment variable; `SHEEPIT_PORT` changes the port.
 
 Herdr is found at the usual install locations rather than through `PATH`: a
 GUI app inherits launchd's minimal environment, not the login shell's. Override

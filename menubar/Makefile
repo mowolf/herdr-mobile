@@ -6,7 +6,7 @@ TARGET  := arm64-apple-macos13.0
 AGENT   := com.sheepit.menubar
 OLDAGENT:= com.herdr.menubar
 ICON    := build/$(APP).icns
-ICONSRC := ../static/icon.svg
+ICONSRC := ../web/icon.svg
 
 .PHONY: all run install login unlogin clean
 

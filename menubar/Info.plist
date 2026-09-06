@@ -10,7 +10,7 @@
     <string>dev.sheepit.menubar</string>
     <key>CFBundleExecutable</key>
     <string>SheepIt</string>
-    <!-- Contents/Resources/SheepIt.icns, built from static/icon.svg. -->
+    <!-- Contents/Resources/SheepIt.icns, built from web/icon.svg. -->
     <key>CFBundleIconFile</key>
     <string>SheepIt</string>
     <key>CFBundleVersion</key>

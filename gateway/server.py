@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-herdr-mobile: Minimal mobile gateway & web server for Herdr.
+SheepIt: the gateway between the phone and a local Herdr server.
 Connects directly to the Herdr UNIX socket and serves a mobile-friendly PWA.
 """
 
@@ -34,8 +34,9 @@ def default_socket_path() -> str:
 
 HERDR_SOCKET_PATH = os.environ.get("HERDR_SOCKET") or default_socket_path()
 HOST = os.environ.get("HOST", "127.0.0.1")
-PORT = int(os.environ.get("PORT", "3009"))
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+PORT = int(os.environ.get("SHEEPIT_PORT") or os.environ.get("PORT", "3009"))
+# The PWA lives beside the gateway, not inside it.
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 def call_herdr_rpc(method: str, params: dict = None, timeout: float = 5.0) -> dict:
@@ -53,7 +54,7 @@ def call_herdr_rpc(method: str, params: dict = None, timeout: float = 5.0) -> di
     s.settimeout(timeout)
     try:
         s.connect(HERDR_SOCKET_PATH)
-        req = {"id": "herdr-mobile", "method": method, "params": params or {}}
+        req = {"id": "sheepit", "method": method, "params": params or {}}
         payload = json.dumps(req).encode("utf-8") + b"\n"
         s.sendall(payload)
 
@@ -235,7 +236,7 @@ class HerdrHandler(BaseHTTPRequestHandler):
             # Drive the list from workspaces, not agents: a freshly created
             # workspace has no agent yet and would otherwise be invisible.
             # Workspace labels are also what the desktop UI shows
-            # ("herdr-mobile", "ib-orbit") - agent.list only carries ids.
+            # ("sheepit", "ib-orbit") - agent.list only carries ids.
             ws_list = call_herdr_rpc("workspace.list").get("result", {}).get("workspaces", [])
             panes = call_herdr_rpc("pane.list").get("result", {}).get("panes", [])
 
@@ -450,16 +451,16 @@ class HerdrHandler(BaseHTTPRequestHandler):
         else:
             rel_path = req_path.lstrip("/")
 
-        target_file = (STATIC_DIR / rel_path).resolve()
+        target_file = (WEB_DIR / rel_path).resolve()
 
         # Prevent directory traversal
-        if not str(target_file).startswith(str(STATIC_DIR)):
+        if not str(target_file).startswith(str(WEB_DIR)):
             self.send_error(HTTPStatus.FORBIDDEN, "Access denied")
             return
 
         if not target_file.is_file():
             # SPA fallback: if not an asset, serve index.html
-            target_file = STATIC_DIR / "index.html"
+            target_file = WEB_DIR / "index.html"
             if not target_file.is_file():
                 self.send_error(HTTPStatus.NOT_FOUND, "File not found")
                 return
@@ -547,11 +548,11 @@ class StatusWatcher(threading.Thread):
 
 
 def run():
-    STATIC_DIR.mkdir(parents=True, exist_ok=True)
+    WEB_DIR.mkdir(parents=True, exist_ok=True)
     server_address = (HOST, PORT)
     httpd = ThreadingHTTPServer(server_address, HerdrHandler)
     StatusWatcher().start()
-    print(f"herdr-mobile listening on http://{HOST}:{PORT}")
+    print(f"SheepIt gateway listening on http://{HOST}:{PORT}")
     print(f"Herdr socket target: {HERDR_SOCKET_PATH}")
     try:
         httpd.serve_forever()

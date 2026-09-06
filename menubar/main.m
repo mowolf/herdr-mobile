@@ -1,4 +1,4 @@
-// SheepIt - a menu bar switch for the herdr-mobile gateway.
+// SheepIt - a menu bar switch for the SheepIt gateway.
 //
 // Owns two child processes and keeps them in step:
 //   * the gateway itself (server.py), so the phone has something to talk to
@@ -50,22 +50,26 @@
     NSString *pref = [NSUserDefaults.standardUserDefaults stringForKey:@"serverPath"];
     if (pref.length && [fm isReadableFileAtPath:pref]) return pref;
 
-    NSString *env = NSProcessInfo.processInfo.environment[@"HERDR_SERVER"];
+    NSString *env = NSProcessInfo.processInfo.environment[@"SHEEPIT_SERVER"];
     if (env.length && [fm isReadableFileAtPath:env]) return env;
 
     NSURL *dir = [NSURL fileURLWithPath:NSBundle.mainBundle.bundlePath];
     for (int i = 0; i < 6; i++) {
         dir = dir.URLByDeletingLastPathComponent;
-        NSString *candidate = [dir URLByAppendingPathComponent:@"server.py"].path;
+        NSString *candidate = [dir URLByAppendingPathComponent:@"gateway/server.py"].path;
         if ([fm isReadableFileAtPath:candidate]) return candidate;
     }
-    NSString *fallback = @"~/repos/herdr-mobile/server.py".stringByExpandingTildeInPath;
-    return [fm isReadableFileAtPath:fallback] ? fallback : nil;
+    for (NSString *guess in @[@"~/repos/sheepit/gateway/server.py",
+                              @"~/repos/herdr-mobile/gateway/server.py"]) {
+        NSString *fallback = guess.stringByExpandingTildeInPath;
+        if ([fm isReadableFileAtPath:fallback]) return fallback;
+    }
+    return nil;
 }
 
 #pragma mark - Herdr
 
-/// Mirrors server.py: HERDR_SOCKET, else the current user's config dir.
+/// Mirrors the gateway: HERDR_SOCKET, else the current user's config dir.
 - (NSString *)resolveSocketPath {
     NSString *env = NSProcessInfo.processInfo.environment[@"HERDR_SOCKET"];
     if (env.length) return env;
@@ -206,7 +210,7 @@
 #pragma mark - Lifecycle
 
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
-    NSString *envPort = NSProcessInfo.processInfo.environment[@"HERDR_PORT"];
+    NSString *envPort = NSProcessInfo.processInfo.environment[@"SHEEPIT_PORT"];
     self.port = envPort.length ? envPort : @"3009";
     self.serverPath = [self resolveServerPath];
     self.tailscalePath = [self resolveTailscalePath];
@@ -295,7 +299,7 @@
    silhouette that AppKit tints for the light or dark bar, so it cannot carry
    colour and says "running" with a slash instead. Drawn rather than shipped as
    an asset - the whole app is one .m file, and a bundled image would need a
-   resource to keep in step with static/icon.svg. */
+   resource to keep in step with web/icon.svg. */
 - (NSImage *)sheepImageRunning:(BOOL)running {
     const CGFloat height = 16.0;          // the usual size of menu bar artwork
     const CGFloat scale = height / 34.0;  // the sheep is drawn in a 44x34 box

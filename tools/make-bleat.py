@@ -2,7 +2,7 @@
 """Synthesise the sheep bleat the app plays when an agent finishes.
 
 Committing a .wav with no source leaves a sound nobody can tune, so the file is
-generated: run `python3 make_bleat.py` to rewrite static/bleat.wav.
+generated: run `python3 tools/make-bleat.py` to rewrite web/bleat.wav.
 
 A bleat is a buzzy glottal source under an open vowel, flattened by the fast
 tremolo that makes it read as a sheep rather than a synth tone. Three formant
@@ -17,7 +17,7 @@ from pathlib import Path
 
 RATE = 22050
 DUR = 0.85
-OUT = Path(__file__).parent / "static" / "bleat.wav"
+OUT = Path(__file__).resolve().parent.parent / "web" / "bleat.wav"
 
 # /ae/ as in "baa": F1 low and open, F2 high and bright, F3 for presence. The
 # upper two are lifted hard because a glottal source rolls off at -6dB/octave,
