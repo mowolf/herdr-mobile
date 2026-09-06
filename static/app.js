@@ -578,16 +578,16 @@
 
   /* One sheep per project, the same animal the home screen icon shows. Colour
      carries the status, but so does the posture: an agent that is working
-     grazes, one that has stopped stands with its head up, one that is blocked
-     pricks its ears at you, and a pane with no agent at all lies down and
-     sleeps. Drawn inline so the fleece can inherit the row's colour instead of
-     shipping five copies of the file. */
+     grazes, one that is idle stands with its head up, a blocked one pricks its
+     ear at you, and a finished one lies down to sleep. A pane with no agent is
+     an empty pasture - no sheep at all. Drawn inline so the fleece can inherit
+     the row's colour instead of shipping five copies of the file. */
   const POSE = {
     working: "graze",
     idle: "stand",
-    done: "stand",
+    done: "sleep",
     blocked: "alert",
-    unknown: "sleep",
+    unknown: "empty",
   };
 
   function sheepBody(dy, legs) {
@@ -626,8 +626,23 @@
       <path class="sheep-lid" d="M36.4 24.2 q1.6 1.4 3.2 0"/>`,
   };
 
+  /* Nobody home: bare ground where the sheep would stand. Quieter than the
+     animals on purpose - it marks the rows with nothing running. */
+  const EMPTY_PASTURE = `
+      <path d="M2 24 C 10 19, 20 19, 26 22 C 32 25, 38 23, 42 20 L42 32 L2 32 Z"
+            fill="currentColor" opacity="0.32"/>
+      <path d="M2 24 C 10 19, 20 19, 26 22 C 32 25, 38 23, 42 20" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+      <path d="M11 20 q0.6 -3 2.4 -4.4" fill="none" stroke="currentColor"
+            stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+      <path d="M33 20.6 q-0.8 -2.6 -2.4 -3.8" fill="none" stroke="currentColor"
+            stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>`;
+
   function sheepSvg(status) {
     const pose = POSE[status] || POSE.unknown;
+    if (pose === "empty") {
+      return `<svg class="sheep" viewBox="0 0 44 34" aria-hidden="true">${EMPTY_PASTURE}</svg>`;
+    }
     const asleep = pose === "sleep";
     return `
       <svg class="sheep" viewBox="0 0 44 34" aria-hidden="true">

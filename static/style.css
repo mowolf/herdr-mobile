@@ -348,7 +348,8 @@ html, body {
   animation: sheep-alert 1.2s ease-in-out infinite;
 }
 
-.sheep-wrap.unknown {
+/* The sleeping sheep only breathes; the empty pasture does not move at all. */
+.sheep-wrap.done {
   animation: sheep-breathe 3.6s ease-in-out infinite;
 }
 
@@ -370,7 +371,7 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .sheep-wrap.working,
   .sheep-wrap.blocked,
-  .sheep-wrap.unknown { animation: none; }
+  .sheep-wrap.done { animation: none; }
 }
 
 .agent-dot {
