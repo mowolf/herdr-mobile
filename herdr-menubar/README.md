@@ -2,11 +2,12 @@
 
 A menu bar switch for the herdr-mobile gateway on Apple Silicon macOS.
 
-One toggle drives the three things the phone needs, which otherwise have to be
+One toggle drives the four things the phone needs, which otherwise have to be
 started by hand and drift out of step:
 
 | | |
 |---|---|
+| **Herdr** | `herdr server` is started if no server is listening — the gateway is only a proxy onto its socket, so without it the phone shows nothing |
 | **Gateway** | runs `server.py` on `127.0.0.1:3009` |
 | **Tailscale** | brought up if it is stopped — the phone reaches the gateway over the tailnet |
 | **`caffeinate -s`** | an asleep Mac cannot send a push notification, so alerts silently never arrive |
@@ -39,6 +40,16 @@ Swift AppKit build, and clang is unaffected.
 `server.py` is located by walking up from the bundle, so a build inside the
 repository finds it automatically. Override with the `serverPath` user default
 or the `HERDR_SERVER` environment variable; `HERDR_PORT` changes the port.
+
+Herdr is found at the usual install locations rather than through `PATH`: a
+GUI app inherits launchd's minimal environment, not the login shell's. Override
+with the `herdrPath` user default or `HERDR_BIN`. Liveness is a `connect()` to
+`~/.config/herdr/herdr.sock` (`HERDR_SOCKET` wins), so a socket file left
+behind by a crash does not read as running.
+
+Turning the switch off does not stop Herdr, and neither does quitting: the
+headless server holds every pane and agent that is open, so tearing it down is
+`herdr server stop`, never a side effect of the toggle.
 
 The app and the launchd agent cannot both own the port. If you use this app,
 remove the agent:

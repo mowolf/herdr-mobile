@@ -5,10 +5,11 @@
 //   * `caffeinate -s`, because an asleep Mac cannot send a push notification,
 //     which is what made "notify me when an agent finishes" unreliable
 //
-// It also brings Tailscale up, since the phone reaches the gateway over the
-// tailnet and a stopped Tailscale takes the whole thing offline.
+// It also brings up the two services the gateway is useless without: Herdr
+// itself, since the gateway is only a proxy onto its socket, and Tailscale,
+// since the phone reaches the gateway over the tailnet.
 //
-// One switch drives both, and the bar icon shows the state at a glance.
+// One switch drives all of it, and the bar icon shows the state at a glance.
 //
 // Written in Objective-C rather than Swift on purpose: this machine's Command
 // Line Tools ship a duplicate SwiftBridging modulemap that breaks every Swift
@@ -16,15 +17,22 @@
 
 #import <AppKit/AppKit.h>
 #import <signal.h>
+#import <sys/socket.h>
+#import <sys/un.h>
+#import <unistd.h>
 
 @interface Controller : NSObject <NSApplicationDelegate, NSMenuDelegate>
 @property(strong) NSStatusItem *statusItem;
 @property(strong) NSTask *server;
 @property(strong) NSTask *caffeinate;
+@property(strong) NSTask *herdr;
 @property(copy) NSString *port;
 @property(copy) NSString *serverPath;
 @property(copy) NSString *tailscalePath;
+@property(copy) NSString *herdrPath;
+@property(copy) NSString *socketPath;
 @property(assign) BOOL tailscaleUp;
+@property(assign) BOOL herdrUp;
 @end
 
 @implementation Controller
@@ -53,6 +61,90 @@
     }
     NSString *fallback = @"~/repos/herdr-mobile/server.py".stringByExpandingTildeInPath;
     return [fm isReadableFileAtPath:fallback] ? fallback : nil;
+}
+
+#pragma mark - Herdr
+
+/// Mirrors server.py: HERDR_SOCKET, else the current user's config dir.
+- (NSString *)resolveSocketPath {
+    NSString *env = NSProcessInfo.processInfo.environment[@"HERDR_SOCKET"];
+    if (env.length) return env;
+    return @"~/.config/herdr/herdr.sock".stringByExpandingTildeInPath;
+}
+
+/// A GUI app inherits launchd's minimal PATH, not the login shell's, so the
+/// binary has to be looked for where the installers actually put it.
+- (NSString *)resolveHerdrPath {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *pref = [NSUserDefaults.standardUserDefaults stringForKey:@"herdrPath"];
+    if (pref.length && [fm isExecutableFileAtPath:pref]) return pref;
+
+    NSString *env = NSProcessInfo.processInfo.environment[@"HERDR_BIN"];
+    if (env.length && [fm isExecutableFileAtPath:env]) return env;
+
+    NSArray *candidates = @[
+        @"/opt/homebrew/bin/herdr",
+        @"/usr/local/bin/herdr",
+        @"/run/current-system/sw/bin/herdr",   // nix-darwin
+        @"~/.local/bin/herdr".stringByExpandingTildeInPath,
+        @"~/.herdr/bin/herdr".stringByExpandingTildeInPath,
+    ];
+    for (NSString *path in candidates) {
+        if ([fm isExecutableFileAtPath:path]) return path;
+    }
+    return nil;
+}
+
+/// Connect rather than stat: a crashed server leaves the socket file behind,
+/// and `herdr status` would cost a process spawn on every menu open.
+- (BOOL)checkHerdr {
+    if (!self.socketPath) return NO;
+    struct sockaddr_un addr = {0};
+    addr.sun_family = AF_UNIX;
+    const char *path = self.socketPath.fileSystemRepresentation;
+    if (!path || strlen(path) >= sizeof(addr.sun_path)) return NO;
+    strlcpy(addr.sun_path, path, sizeof(addr.sun_path));
+
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return NO;
+    BOOL ok = connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0;
+    close(fd);
+    return ok;
+}
+
+/// Off the main thread: the socket does not appear the instant the process does.
+- (void)startHerdr {
+    if (!self.herdrPath) return;
+    if ([self checkHerdr]) { self.herdrUp = YES; [self render]; return; }
+
+    // Detached from this app on purpose. The headless server holds every pane
+    // and agent the user has open, so it outlives the switch being turned off
+    // - stopping it is `herdr server stop`, never a side effect of quitting.
+    //
+    // setsid() first, via a python3 that immediately execs herdr: a plain child
+    // stays in this app's process group, and launchd kills the whole group when
+    // the LaunchAgent is booted out, which would take every open pane with it.
+    NSTask *task = [NSTask new];
+    task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/python3"];
+    task.arguments = @[ @"-c", @"import os,sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])",
+                        self.herdrPath, @"server" ];
+    task.standardOutput = NSFileHandle.fileHandleWithNullDevice;
+    task.standardError = NSFileHandle.fileHandleWithNullDevice;
+    if (![task launchAndReturnError:nil]) return;
+    self.herdr = task;
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        BOOL up = NO;
+        for (int i = 0; i < 50 && !up; i++) {   // up to 5s
+            usleep(100000);
+            up = [weakSelf checkHerdr];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            weakSelf.herdrUp = up;
+            [weakSelf render];
+        });
+    });
 }
 
 #pragma mark - Tailscale
@@ -118,6 +210,8 @@
     self.port = envPort.length ? envPort : @"3009";
     self.serverPath = [self resolveServerPath];
     self.tailscalePath = [self resolveTailscalePath];
+    self.herdrPath = [self resolveHerdrPath];
+    self.socketPath = [self resolveSocketPath];
 
     self.statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];
     [self render];
@@ -144,6 +238,10 @@
 
 - (void)start {
     if (!self.serverPath) { [self render]; return; }
+
+    // The gateway is only a proxy onto Herdr's socket, so there has to be a
+    // Herdr server on the other end for the phone to show anything at all.
+    [self startHerdr];
 
     // System python3 is in the macOS firewall's allowlist; a Homebrew one is
     // not, and incoming tailnet connections to it are silently dropped.
@@ -212,6 +310,12 @@
                                   : @"Gateway stopped"]];
     [menu addItem:[self header:on ? @"Keeping the Mac awake"
                                   : @"Mac may sleep - no notifications"]];
+    if (self.herdrPath || self.herdrUp) {
+        [menu addItem:[self header:self.herdrUp ? @"Herdr server running"
+                                                : @"Herdr server not running"]];
+    } else {
+        [menu addItem:[self header:@"herdr not found"]];
+    }
     if (self.tailscalePath) {
         [menu addItem:[self header:self.tailscaleUp ? @"Tailscale connected"
                                                     : @"Tailscale disconnected"]];
@@ -235,12 +339,15 @@
     self.statusItem.menu = menu;
 }
 
-/// Tailscale can be stopped from its own menu bar item, so re-check on open
-/// rather than trusting the value from launch time.
+/// Both can be stopped from outside this app - Tailscale from its own menu bar
+/// item, Herdr with `herdr server stop` - so re-check on open rather than
+/// trusting the values from launch time.
 - (void)menuWillOpen:(NSMenu *)menu {
-    BOOL up = [self checkTailscale];
-    if (up != self.tailscaleUp) {
-        self.tailscaleUp = up;
+    BOOL tailscale = [self checkTailscale];
+    BOOL herdr = [self checkHerdr];
+    if (tailscale != self.tailscaleUp || herdr != self.herdrUp) {
+        self.tailscaleUp = tailscale;
+        self.herdrUp = herdr;
         [self render];
     }
 }
