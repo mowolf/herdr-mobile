@@ -111,4 +111,13 @@ belongs to this repository is SheepIt — `SHEEPIT_*` environment variables,
 
 ## Licence
 
-No licence yet — ask before reusing.
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Use it, change it, share your
+changes — for anything noncommercial. Personal and hobby use, study, charities,
+schools and public institutions are all covered.
+
+Selling it, or using it as part of a commercial product or service, is not.
+For that, ask: <moritz@moritzwolf.com>.
+
+Note this is a *source-available* licence, not an open-source one — the
+noncommercial restriction is exactly what the OSI definition disallows. If you
+need an OSI licence for a policy reason, this is not it.
