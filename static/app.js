@@ -7,6 +7,7 @@
     historyText: "",
     linesCount: 100,
     showStatusBar: false,
+    numberKeys: 3,
     showKeys: true,
     mode: "",
     isUserScrolledUp: false,
@@ -40,6 +41,7 @@
   const elBtnCycleMode = document.getElementById("btn-cycle-mode");
   const elBtnKeys = document.getElementById("btn-keys");
   const elKeysBar = document.getElementById("keys-bar");
+  const elKeysNumbers = document.getElementById("keys-numbers");
   const elModeCurrent = document.getElementById("mode-current");
   const elBtnSend = document.getElementById("btn-send");
   const elBtnCtrlC = document.getElementById("btn-ctrl-c");
@@ -200,6 +202,10 @@
     { re: /^⏵⏵/, cls: "status" }, // "auto mode on ..."
   ];
   const RE_BOX = /^[┌┐└┘├┤┬┴┼│╭╮╯╰┏┓┗┛┣┫┳┻╋┃║╔╗╚╝╠╣╦╩╬]/;
+  // "❯ 2. app.bodyweight.plus" - one choice in a selection prompt.
+  const RE_OPTION = /^[\s\u00a0]*[❯>]?[\s\u00a0]*(\d{1,2})\.[\s\u00a0]/;
+  // The footer the terminal prints under a selection prompt.
+  const RE_SELECT_HINT = /Enter to select|keys? to navigate|Esc to cancel/i;
   // Long runs of rule glyphs anywhere in a line, not just whole-line rules.
   const RE_INLINE_RULE = /([─━┄┅┈┉═—–_=*.])\1{7,}/g;
 
@@ -246,14 +252,37 @@
     const lastRule = ruleIdxs.length ? ruleIdxs[ruleIdxs.length - 1] : -1;
     const prevRule = ruleIdxs.length > 1 ? ruleIdxs[ruleIdxs.length - 2] : -1;
 
-    /* The final pair of rules frames the terminal's own input box - whatever
-       is typed on the desktop, plus any autocomplete menu it has opened. That
-       is live UI state, not conversation, so it must not render as a past
-       user message. Lift it out and let the caller show it next to the phone's
-       own composer instead. */
+    /* A selection prompt - AskUserQuestion, a plan approval, a tool
+       confirmation - is framed by the same pair of rules as the input box, and
+       mistaking one for the other is how a question vanishes from the phone
+       entirely. Its numbered options and its "Enter to select" footer, which
+       runs past the closing rule, are what tell the two apart. */
+    let hintIdx = -1;
+    let optionMax = 0;
+    if (prevRule >= 0) {
+      for (let i = prevRule + 1; i < raw.length; i++) {
+        if (RE_SELECT_HINT.test(raw[i])) hintIdx = i;
+      }
+      // Without a footer, only the framed lines count - the status bar below
+      // is not part of any prompt.
+      const optionEnd = hintIdx >= 0 ? hintIdx : lastRule;
+      for (let i = prevRule + 1; i <= optionEnd; i++) {
+        const m = RE_OPTION.exec(raw[i]);
+        if (m) optionMax = Math.max(optionMax, Number(m[1]));
+      }
+    }
+    const isSelection = prevRule >= 0 && (hintIdx >= 0 || optionMax >= 2);
+    // Where the agent's own status bar starts; a prompt's footer is not it.
+    const statusFrom = isSelection && hintIdx > lastRule ? hintIdx : lastRule;
+
+    /* The final pair of rules otherwise frames the terminal's own input box -
+       whatever is typed on the desktop, plus any autocomplete menu it has
+       opened. That is live UI state, not conversation, so it must not render
+       as a past user message. Lift it out and let the caller show it next to
+       the phone's own composer instead. */
     let inputStart = -1;
     let inputEnd = -1;
-    if (prevRule >= 0 && lastRule - prevRule <= 12) {
+    if (!isSelection && prevRule >= 0 && lastRule - prevRule <= 12) {
       inputStart = prevRule + 1;
       inputEnd = lastRule - 1;
     }
@@ -285,7 +314,9 @@
       const trimmed = line.trim();
       let cls = classifyLine(trimmed);
 
-      if (lastRule >= 0 && i > lastRule && cls !== "rule") cls = "status";
+      if (isSelection && cls === "rule" && i === lastRule) return; // keeps the prompt one card
+      if (statusFrom >= 0 && i > statusFrom && cls !== "rule") cls = "status";
+      else if (isSelection && i > prevRule && i <= statusFrom && cls !== "rule") cls = "select";
 
       if (cls === "rule") {
         const label = ruleLabel(trimmed);
@@ -318,7 +349,7 @@
       return b.rows.length > 0;
     });
 
-    return { blocks: kept, liveInput, mode };
+    return { blocks: kept, liveInput, mode, optionCount: isSelection ? optionMax : 0 };
   }
 
   /* What the desktop currently has typed into the pane, mirrored above the
@@ -329,9 +360,24 @@
     if (show) elTerminalInput.textContent = textValue;
   }
 
+  /* The keypad ships with 1-3, but a prompt can list more - or fewer - and a
+     choice you cannot press is the same as no choice at all. Follow whatever
+     the current prompt actually offers, never dropping below the three keys
+     the pad is built around. */
+  function renderNumberKeys(count) {
+    const want = Math.min(Math.max(count || 0, 3), 9);
+    if (want === state.numberKeys) return;
+    state.numberKeys = want;
+    elKeysNumbers.innerHTML = Array.from({ length: want }, (_, i) => {
+      const n = i + 1;
+      return `<button type="button" class="key-btn" data-key="${n}">${n}</button>`;
+    }).join("");
+  }
+
   function renderTranscript(text) {
     if (!text) {
       renderLiveInput("");
+      renderNumberKeys(0);
       elHistoryContent.innerHTML =
         '<div class="history-empty">(No output recorded yet)</div>';
       return;
@@ -341,6 +387,7 @@
     // to nothing: an empty input box, or the status bar when hidden.
     const parsed = parseTranscript(text);
     renderLiveInput(parsed.liveInput);
+    renderNumberKeys(parsed.optionCount);
     state.mode = parsed.mode;
     elModeCurrent.textContent = parsed.mode || "unknown";
 

@@ -8,7 +8,8 @@ A minimal, distraction-free mobile web interface for [Herdr](https://herdr.dev) 
 - **Native iOS Dictation**: Use native iOS voice-to-text directly from the virtual keyboard microphone into prompts.
 - **Readable Transcript**: The pane's output is parsed into blocks and coloured by speaker, mirroring the terminal's own ANSI colours. Full-width rules collapse to hairlines and tables keep their alignment, so nothing wraps into a wall of dashes.
 - **Project Picker**: A dropdown naming the current project, with a full-screen list of every workspace and live status (🟢 Idle, 🟡 Working, 🔴 Blocked). Create a workspace with **New**; swipe a row left to close one.
-- **Key Palette**: `y`, `n`, `1`-`3`, arrows, tab and enter for the confirmation prompts agents stop on, plus `Esc` and `Ctrl+C`.
+- **Key Palette**: `y`, `n`, number keys, arrows, tab and enter for the confirmation prompts agents stop on, plus `Esc` and `Ctrl+C`. The number keys follow the prompt on screen, so a question with five options gets five keys.
+- **Selection Prompts**: The question an agent is waiting on renders as its own card instead of being mistaken for the desktop's input box, so choices never go missing on the phone.
 - **Desktop Input Mirror**: Shows what is typed into the pane on the laptop, with one tap to pull it into the phone's composer.
 - **Push Notifications**: Get told when an agent finishes, even off the tailnet with the phone locked. See [Push Notifications](#push-notifications-ios).
 - **Agent Mode**: Cycle auto / manual / plan from settings without reaching for the laptop.

@@ -390,6 +390,18 @@ html, body {
   white-space: pre-wrap;
 }
 
+/* The prompt an agent is waiting on: its options are the reason the phone is
+   in your hand, so it gets a card of its own rather than blending into prose. */
+.t-select {
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--accent-primary);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
 /* Tables keep their alignment and scroll sideways instead of wrapping. */
 .t-table {
   white-space: pre;
@@ -533,14 +545,20 @@ html, body {
 
 .keys-bar.hidden { display: none; }
 
-/* Two fixed rows: every key stays reachable without a sideways swipe. */
+/* Two fixed rows: every key stays reachable without a sideways swipe. Rows
+   wrap rather than squeeze when a prompt lists more options than usual. */
 .keys-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
+/* Only a grouping hook for the dynamic number keys; the buttons stay direct
+   flex children of the row. */
+.keys-numbers { display: contents; }
+
 .key-btn {
-  flex: 1;
+  flex: 1 1 34px;
   min-width: 0;
   height: 34px;
   background: var(--bg-card);
